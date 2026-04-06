@@ -101,11 +101,11 @@ if __name__ == "__main__":
     
     jobs = scraper.scrape_all(
         roles=["software engineer", "python developer"],
-        locations=["Bangalore", "Mumbai"],
+        locations=["Bangalore", "Mumbai"], # add feature: to select location.
         num_per_search=10
     )
     
-    for job in jobs[:10]:
+    for job in jobs[:20]:
         print(f"\nTitle:     {job.title}")
         print(f"Company:     {job.company}")
         print(f"Location:    {job.location}")
