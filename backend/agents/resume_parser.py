@@ -110,7 +110,7 @@ class ResumeParser(BaseAgent):
 
 async def test():
     parser = ResumeParser()
-    result = await parser.parse("MidamResume.pdf")
+    result = await parser.parse(" ") #Has To Be done via frontend.
     
     print("\n--- PARSED RESUME ---")
     print(f"Name: {result.name}")
