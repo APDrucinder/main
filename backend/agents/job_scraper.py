@@ -1,5 +1,3 @@
-# backend/agents/job_scraper.py
-
 from jobspy import scrape_jobs
 from pydantic import BaseModel
 from typing import List, Optional
@@ -17,6 +15,7 @@ class JobPosting(BaseModel):
     location: str
     description: str
     salary_range: Optional[str] = None
+    experience_required: Optional[str] = None  # FIX: Added missing field
     apply_url: str
     source: str
     posted_date: Optional[datetime] = None
@@ -45,24 +44,38 @@ class JobScraper(BaseAgent):
             print(f"Indeed scraping failed: {e}")
             return []
     
-    def _parse_results(self, df: pd.DataFrame, source: str) -> List[JobPosting]:
+    def _parse_results(self, df, source: str) -> List[JobPosting]:
         jobs = []
+        
         for _, row in df.iterrows():
             try:
-                salary = str(row.get("min_amount", "")).strip()
-                jobs.append(JobPosting(
-                    title=str(row.get("title", "")),
-                    company=str(row.get("company", "")),
-                    location=str(row.get("location", "")),
-                    description=str(row.get("description", ""))[:2000],
-                    salary_range=salary if salary and salary != "nan" else None,
-                    apply_url=str(row.get("job_url", "")),
+                # Build salary string from min/max amount
+                salary = None
+                if pd.notna(row.get('min_amount')) and pd.notna(row.get('max_amount')):
+                    salary = f"{row['min_amount']} - {row['max_amount']} {row.get('currency', '')}"
+                elif pd.notna(row.get('min_amount')):
+                    salary = f"{row['min_amount']} {row.get('currency', '')}"
+
+                # FIX: Handle pandas NaT/NaN for dates which breaks Pydantic validation
+                raw_date = row.get('date_posted')
+                clean_date = raw_date if pd.notna(raw_date) else None
+
+                job = JobPosting(
+                    title=str(row.get('title', '')),
+                    company=str(row.get('company', '')),
+                    location=str(row.get('location', '')),
+                    description=str(row.get('description', '')),  # no trim
+                    salary_range=salary,
+                    experience_required=str(row.get('job_level', 'Not Specified')), 
+                    apply_url=str(row.get('job_url', '')),
                     source=source,
-                    posted_date=row.get("date_posted")
-                ))
+                    posted_date=clean_date
+                )
+                jobs.append(job)
             except Exception as e:
                 print(f"Skipping malformed job: {e}")
                 continue
+        
         return jobs
     
     def scrape_all(self, roles: List[str], locations: List[str], num_per_search: int = 20) -> List[JobPosting]:
@@ -83,6 +96,7 @@ class JobScraper(BaseAgent):
 
 
 if __name__ == "__main__":
+    # Note: ensure you have a dummy or real implementation of BaseAgent to avoid inheritance errors
     scraper = JobScraper()
     
     jobs = scraper.scrape_all(
@@ -91,9 +105,13 @@ if __name__ == "__main__":
         num_per_search=10
     )
     
-    for job in jobs[:3]:
-        print(f"\nTitle: {job.title}")
-        print(f"Company: {job.company}")
-        print(f"Location: {job.location}")
-        print(f"URL: {job.apply_url}")
-        print("---")
+    for job in jobs[:10]:
+        print(f"\nTitle:     {job.title}")
+        print(f"Company:     {job.company}")
+        print(f"Location:    {job.location}")
+        print(f"Salary:      {job.salary_range}")
+        print(f"Experience:  {job.experience_required}")
+        print(f"Posted:      {job.posted_date}")
+        print(f"URL:         {job.apply_url}")
+        print(f"Description:\n{job.description[:500]}")
+        print("-" * 60)
