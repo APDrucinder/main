@@ -26,55 +26,67 @@ class JobScraper(BaseAgent):
     def __init__(self):
         super().__init__("job_scraper")
     
-    def scrape_indeed(self, role: str, location: str, num_results: int = 30) -> List[JobPosting]:
-        try:
-            jobs = scrape_jobs(
-                site_name=["indeed"],
-                search_term=role,
-                location=location,
-                results_wanted=num_results,
-                country_indeed="India",
-                hours_old=72
-            )
-            if jobs is None or jobs.empty:
-                print(f"  → No results for '{role}' in '{location}'")
-                return []
-            print(f"  → Got {len(jobs)} indeed jobs for '{role}' in '{location}'")
-            return self._parse_results(jobs, "indeed")
-        except Exception as e:
-            print(f"Indeed scraping failed: {e}")
-            return []
+    def scrape_all(self, roles: List[str], locations: List[str], num_per_search: int = 20) -> List[JobPosting]:
+        all_jobs = []
+        seen_urls = set()
+        
+        # Dropped Naukri to avoid bot blocks. Sticking to the most reliable two.
+        target_sites = ["indeed", "linkedin"]
+        
+        for role in roles:
+            for loc in locations:
+                
+                # 🚀 THE LINKEDIN FIX:
+                # We dynamically ensure ", India" is attached to the location string here 
+                # so LinkedIn stops routing you to Ohio!
+                clean_loc = loc.strip()
+                search_location = clean_loc if "india" in clean_loc.lower() else f"{clean_loc}, India"
+                
+                print(f"\nScraping {', '.join(target_sites).title()} for: '{role}' in '{search_location}'")
+                
+                try:
+                    df = scrape_jobs(
+                        site_name=target_sites,
+                        search_term=role,
+                        location=search_location, # Passing the explicit country string
+                        results_wanted=num_per_search,
+                        country_indeed="India",   # Indeed still requires this explicit flag
+                        hours_old=72
+                    )
+                    
+                    if df is None or df.empty:
+                        print(f"  → No results found.")
+                        continue
+                        
+                    print(f"  → Found {len(df)} total jobs!")
+                    
+                    parsed_jobs = self._parse_results(df)
+                    
+                    for job in parsed_jobs:
+                        if job.apply_url not in seen_urls:
+                            seen_urls.add(job.apply_url)
+                            all_jobs.append(job)
+                            
+                except Exception as e:
+                    print(f"Scraping failed for {role} in {search_location}: {e}")
+                    
+        print(f"\nTotal unique jobs found: {len(all_jobs)}")
+        return all_jobs
 
-    def scrape_linkedin(self, role: str, location: str, num_results: int = 30) -> List[JobPosting]:
-        try:
-            jobs = scrape_jobs(
-                site_name=["linkedin"],
-                search_term=role,
-                location=location,
-                results_wanted=num_results,
-                hours_old=72
-            )
-            if jobs is None or jobs.empty:
-                print(f"  → No LinkedIn results for '{role}' in '{location}'")
-                return []
-            print(f"  → Got {len(jobs)} linkedin jobs for '{role}' in '{location}'")
-            return self._parse_results(jobs, "linkedin")
-        except Exception as e:
-            print(f"LinkedIn scraping failed: {e}")
-            return []
-    
-    def _parse_results(self, df, source: str) -> List[JobPosting]:
+    def _parse_results(self, df) -> List[JobPosting]:
         jobs = []
         for _, row in df.iterrows():
             try:
                 salary = None
                 if pd.notna(row.get('min_amount')) and pd.notna(row.get('max_amount')):
-                    salary = f"{row['min_amount']} - {row['max_amount']} {row.get('currency', '')}"
+                    salary = f"{row['min_amount']} - {row['max_amount']} {row.get('currency', 'INR')}"
                 elif pd.notna(row.get('min_amount')):
-                    salary = f"{row['min_amount']} {row.get('currency', '')}"
+                    salary = f"{row['min_amount']} {row.get('currency', 'INR')}"
 
                 raw_date = row.get('date_posted')
                 clean_date = raw_date if pd.notna(raw_date) else None
+                
+                source_site = str(row.get('site', 'unknown'))
 
                 job = JobPosting(
                     title=str(row.get('title', '')),
@@ -84,32 +96,12 @@ class JobScraper(BaseAgent):
                     salary_range=salary,
                     experience_required=str(row.get('job_level', 'Not Specified')),
                     apply_url=str(row.get('job_url', '')),
-                    source=source,
-                    posted_date=clean_date
+                    source=source_site, 
+                    posted_date=clean_date,
+                    is_remote=bool(row.get('is_remote', False))
                 )
                 jobs.append(job)
             except Exception as e:
                 print(f"Skipping malformed job: {e}")
                 continue
         return jobs
-    
-    def scrape_all(self, roles: List[str], locations: List[str], num_per_search: int = 20) -> List[JobPosting]:
-        all_jobs = []
-        seen_urls = set()
-        
-        for role in roles:
-            for location in locations:
-                print(f"\nScraping Indeed: {role} in {location}")
-                for job in self.scrape_indeed(role, location, num_per_search):
-                    if job.apply_url not in seen_urls:
-                        seen_urls.add(job.apply_url)
-                        all_jobs.append(job)
-
-                print(f"Scraping LinkedIn: {role} in {location}")
-                for job in self.scrape_linkedin(role, location, num_per_search):
-                    if job.apply_url not in seen_urls:
-                        seen_urls.add(job.apply_url)
-                        all_jobs.append(job)
-        
-        print(f"\nTotal unique jobs found: {len(all_jobs)}")
-        return all_jobs
