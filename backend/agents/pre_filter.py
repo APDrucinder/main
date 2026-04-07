@@ -24,16 +24,21 @@ class PreFilter(BaseAgent):
         # Adjust this number based on your specific LLM API rate limits.
         self.semaphore = asyncio.Semaphore(10)
 
-    async def filter_job(self, job: JobPosting, candidate_skills: List[str]) -> PreFilterResult:
+    async def filter_job(self, job: JobPosting, candidate_skills: List[str], pref_remote: bool = False) -> PreFilterResult:
+        # Convert the boolean to a readable string for the LLM
+        remote_status = "Remote" if job.is_remote else "On-site / Hybrid"
+        
         prompt = f"""
-You are a strict job pre-filter. Given a job posting and a candidate's skills,
+You are a strict job pre-filter. Given a job posting and a candidate's profile, 
 decide if this job is worth sending to the candidate for a detailed review.
 
 Candidate Skills: {', '.join(candidate_skills)}
+Candidate Prefers Remote: {pref_remote}
 
 Job Title: {job.title}
 Company: {job.company}
 Location: {job.location}
+Work Mode: {remote_status}
 Description: {job.description[:1000]}
 
 Respond ONLY in JSON. No explanation, no markdown.
@@ -41,10 +46,9 @@ Respond ONLY in JSON. No explanation, no markdown.
 {{
     "passed": true or false,
     "score": a number from 0 to 100 indicating how well the candidate fits,
-    "reason": "one sentence explaining why it passed or failed"
+    "reason": "one sentence explaining why it passed or failed (mention skills or remote status)"
 }}
 """
-        # Protect the LLM call with the concurrency semaphore
         async with self.semaphore:
             try:
                 response = await self._call_llm(prompt=prompt, max_tokens=200, trace_name="pre_filter")
@@ -58,20 +62,20 @@ Respond ONLY in JSON. No explanation, no markdown.
                 )
             except Exception as e:
                 print(f"  → LLM Error on '{job.title}': {e}")
-                # Safe fallback if the LLM call fails or returns bad JSON
-                return PreFilterResult(job=job, passed=False, reason="Evaluation failed due to error", score=0)
+                return PreFilterResult(job=job, passed=False, reason="Evaluation failed", score=0)
 
-    async def filter_all(self, jobs: List[JobPosting], candidate_skills: List[str]) -> List[PreFilterResult]:
-        print(f"\nPre-filtering {len(jobs)} jobs concurrently...")
+    async def filter_all(self, jobs: List[JobPosting], candidate_skills: List[str], pref_remote: bool = False) -> List[PreFilterResult]:
+        print(f"\nPre-filtering {len(jobs)} jobs...")
         
-        # FIX: Use asyncio.gather to run all filtering tasks concurrently
-        tasks = [self.filter_job(job, candidate_skills) for job in jobs]
+        # Pass the pref_remote preference to every task
+        tasks = [self.filter_job(job, candidate_skills, pref_remote) for job in jobs]
         results = await asyncio.gather(*tasks)
 
-        # Print the results after gathering them
         for i, result in enumerate(results):
             status = "✅ PASSED" if result.passed else "❌ FAILED"
-            print(f"  [{i+1}/{len(jobs)}] {status} (score: {result.score}) — {result.job.company} | {result.reason}")
+            # Show the remote status in the log
+            mode = "Remote" if result.job.is_remote else "On-site"
+            print(f"  [{i+1}/{len(jobs)}] {status} ({result.score}) — {result.job.company} ({mode}) | {result.reason}")
 
         passed = [r for r in results if r.passed]
         print(f"\nPre-filter done: {len(passed)}/{len(jobs)} jobs passed")
