@@ -26,8 +26,7 @@ class PreFilter(BaseAgent):
 
     async def filter_job(self, job: JobPosting, candidate_skills: List[str], pref_remote: bool = False) -> PreFilterResult:
         # Convert the boolean to a readable string for the LLM
-        remote_status = "Remote" if job.is_remote else "On-site / Hybrid"
-        
+        remote_status = "Remote" if getattr(job, 'is_remote', False) else "On-site / Hybrid"
         prompt = f"""
 You are a strict job pre-filter. Given a job posting and a candidate's profile, 
 decide if this job is worth sending to the candidate for a detailed review.

@@ -13,12 +13,12 @@ class WorkExperience(BaseModel):
     company: str
     role: str
     duration: str
-    description: str
+    description: Optional[str] = ""
 
 class Education(BaseModel):
     institution: str
     degree: str
-    field: str
+    field: Optional[str] = "Not Specified"
     year: str
     cgpa: Optional[float] = None
 
@@ -36,8 +36,17 @@ class ResumeParser(BaseAgent):
     
     def __init__(self):
         super().__init__("resume_parser")
+
+    def _clean_json_response(self, text: str) -> str:
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+        return text.strip()
     
     def _extract_text(self, file_path: str) -> str:
+        file_path = file_path.strip()
         if file_path.endswith('.pdf'):
             return self._extract_pdf(file_path)
         elif file_path.endswith(('.docx', '.doc')):
@@ -58,20 +67,17 @@ class ResumeParser(BaseAgent):
         return "\n".join([para.text for para in doc.paragraphs if para.text.strip()])
     
     async def parse(self, file_path: str) -> ResumeData:
-        # Step 1: Extract raw text
         raw_text = self._extract_text(file_path)
         
         if not raw_text or len(raw_text) < 50:
             raise ValueError("Could not extract text. Please use a text-based PDF.")
         
-        # Step 2: Stricter Prompt for Ollama
         prompt = f"""
         TASK: Convert the Resume Text below into a SINGLE valid JSON object.
         RULES:
         1. Output ONLY the JSON object. 
-        2. NO introductory text, NO markdown code blocks, NO triple backticks.
+        2. No introductory text.
         3. If a field is missing, use null or [].
-        4. Ensure all strings use double quotes.
 
         JSON STRUCTURE:
         {{
@@ -95,31 +101,31 @@ class ResumeParser(BaseAgent):
             trace_name="resume_parsing"
         )
         
-        # Step 3: Clean the response (removes ```json ... ``` if AI adds it)
-        clean_response = response.strip()
-        if clean_response.startswith("```"):
-            clean_response = clean_response.strip("`").replace("json", "", 1).strip()
+        clean_response = self._clean_json_response(response)
         
         try:
-            parsed = json.loads(clean_response)
-            return ResumeData(**parsed)
-        except json.JSONDecodeError as e:
-            print(f"--- DEBUG: RAW AI OUTPUT ---\n{response}\n---------------------------")
-            raise Exception(f"AI returned invalid JSON: {e}")
+            data = json.loads(clean_response)
+        except json.JSONDecodeError:
+            try:
+                if not clean_response.endswith("}"):
+                    clean_response += "}"
+                data = json.loads(clean_response)
+            except Exception as e:
+                print(f"--- DEBUG: RAW AI OUTPUT ---\n{response}\n---------------------------")
+                raise Exception(f"AI returned invalid JSON: {e}")
 
+        return ResumeData(**data)
 
 async def test():
     parser = ResumeParser()
-    result = await parser.parse(" ") #Has To Be done via frontend.
+    result = await parser.parse("Dhruv_Resume.pdf")
     
     print("\n--- PARSED RESUME ---")
     print(f"Name: {result.name}")
     print(f"Email: {result.email}")
     print(f"Skills: {', '.join(result.skills[:5])}")
     print(f"Experience: {result.total_experience_years} years")
-    print(f"Education: {result.education[0].institution}")
     print("--------------------\n")
-    print("Full JSON:")
     print(result.model_dump_json(indent=2))
 
 if __name__ == "__main__":
