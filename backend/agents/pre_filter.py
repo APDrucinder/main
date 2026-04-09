@@ -10,11 +10,13 @@ from shared.base_agent import BaseAgent
 from agents.job_scraper import JobPosting
 
 class PreFilterResult:
-    def __init__(self, job: JobPosting, passed: bool, reason: str, score: int):
+    def __init__(self, job: JobPosting, passed: bool, reason: str, score: int, matched_skills: list = [], missing_skills: list = []):
         self.job = job
         self.passed = passed
         self.reason = reason
         self.score = score
+        self.matched_skills = matched_skills
+        self.missing_skills = missing_skills
 
 class PreFilter(BaseAgent):
 
@@ -27,25 +29,25 @@ class PreFilter(BaseAgent):
     async def filter_job(self, job: JobPosting, candidate_skills: List[str], pref_remote: bool = False) -> PreFilterResult:
         # Convert the boolean to a readable string for the LLM
         remote_status = "Remote" if getattr(job, 'is_remote', False) else "On-site / Hybrid"
-        prompt = f"""
-You are a strict job pre-filter. Given a job posting and a candidate's profile, 
+        prompt = fprompt = f"""
+You are a strict job pre-filter. Given a job posting and a candidate's skills,
 decide if this job is worth sending to the candidate for a detailed review.
 
 Candidate Skills: {', '.join(candidate_skills)}
-Candidate Prefers Remote: {pref_remote}
 
 Job Title: {job.title}
 Company: {job.company}
 Location: {job.location}
-Work Mode: {remote_status}
 Description: {job.description[:1000]}
 
 Respond ONLY in JSON. No explanation, no markdown.
 
 {{
     "passed": true or false,
-    "score": a number from 0 to 100 indicating how well the candidate fits,
-    "reason": "one sentence explaining why it passed or failed (mention skills or remote status)"
+    "score": 0 to 100,
+    "reason": "one sentence explaining why",
+    "matched_skills": ["skill1", "skill2"],
+    "missing_skills": ["skill3", "skill4"]
 }}
 """
         async with self.semaphore:
@@ -57,7 +59,9 @@ Respond ONLY in JSON. No explanation, no markdown.
                     job=job,
                     passed=parsed.get("passed", False),
                     score=parsed.get("score", 0),
-                    reason=parsed.get("reason", "No reason given")
+                    reason=parsed.get("reason", "No reason given"),
+                    matched_skills=parsed.get("matched_skills", []),
+                    missing_skills=parsed.get("missing_skills", [])
                 )
             except Exception as e:
                 print(f"  → LLM Error on '{job.title}': {e}")
