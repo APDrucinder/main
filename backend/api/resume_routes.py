@@ -1,23 +1,18 @@
-# backend/api/resume_routes.py
-
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from fastapi.concurrency import run_in_threadpool
 from database.storage import upload_resume
 from database.connection import get_db
 from database.models import Resume
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from fastapi import Depends
 import uuid
-import tempfile
-import os
 
 router = APIRouter(prefix="/resume", tags=["resume"])
 
 ALLOWED_TYPES = [
     "application/pdf",
     "application/msword",
-    "application/vnd.openxmlformats-"
-    "officedocument.wordprocessingml.document"
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 ]
 
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
@@ -45,47 +40,35 @@ async def upload_resume_endpoint(
             detail="File too large. Maximum 5MB."
         )
     
-    # Save temporarily for parsing
     suffix = ".pdf" if "pdf" in file.content_type else ".docx"
+    filename = f"{uuid.uuid4()}{suffix}"
     
-    with tempfile.NamedTemporaryFile(
-        suffix=suffix, delete=False
-    ) as tmp:
-        tmp.write(file_bytes)
-        tmp_path = tmp.name
+    # Run the synchronous Supabase upload in a threadpool to prevent blocking FastAPI
+    file_url = await run_in_threadpool(
+        upload_resume,
+        file_bytes=file_bytes,
+        filename=filename,
+        user_id=user_id
+    )
     
-    try:
-        # Upload to Supabase storage
-        file_url = await upload_resume(
-            file_bytes=file_bytes,
-            filename=f"{uuid.uuid4()}{suffix}",
-            user_id=user_id
-        )
-        
-        # Save record to database
-        resume_record = Resume(
-            user_id=user_id,
-            storage_path=file_url,
-            raw_text=None,    # Will be filled after parsing
-            parsed_data=None  # Will be filled after parsing
-        )
-        db.add(resume_record)
-        await db.flush()
-        
-        resume_id = str(resume_record.id)
-        
-        return {
-            "resume_id": resume_id,
-            "file_url": file_url,
-            "status": "uploaded",
-            "message": "Resume uploaded. "
-                       "Parsing will begin shortly."
-        }
-        
-    finally:
-        # Clean up temp file
-        os.unlink(tmp_path)
-
+    # Save record to database
+    resume_record = Resume(
+        user_id=user_id,
+        file_url=file_url,
+        raw_text=None,    
+        parsed_data=None  
+    )
+    
+    db.add(resume_record)
+    await db.commit() # CRITICAL FIX: Actually save to the database!
+    await db.refresh(resume_record) # Refresh to safely get the generated ID
+    
+    return {
+        "resume_id": str(resume_record.id),
+        "file_url": file_url,
+        "status": "uploaded",
+        "message": "Resume uploaded. Parsing will begin shortly."
+    }
 
 @router.get("/{user_id}")
 async def get_resume(
@@ -108,7 +91,7 @@ async def get_resume(
     
     return {
         "resume_id": str(resume.id),
-        "storage_path": resume.storage_path,
+        "file_url": resume.file_url,
         "parsed_data": resume.parsed_data,
         "uploaded_at": resume.uploaded_at
     }

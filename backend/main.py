@@ -1,25 +1,19 @@
-import sentry_sdk
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from api.resume_routes import router as resume_router
+from api.preferences_routes import router as preferences_router
+from api.scan_routes import router as scan_router
+import sentry_sdk
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-app = FastAPI()
+dsn = os.getenv("SENTRY_DSN")
+if dsn:
+    sentry_sdk.init(dsn=dsn, traces_sample_rate=0.5)
 
-# --- COMMENT THIS ENTIRE BLOCK OUT FOR NOW ---
-# dsn = os.getenv("SENTRY_DSN")
-# if dsn:
-#     sentry_sdk.init(
-#         dsn=dsn,
-#         traces_sample_rate=0.5
-#     )
-# ---------------------------------------------
-
-# Keep the rest of your app routes below...
-from fastapi.middleware.cors import CORSMiddleware
-from api.resume_routes import router as resume_router
-from api.preferences_routes import router as prefs_router
+app = FastAPI(title="AIAgents API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,7 +24,8 @@ app.add_middleware(
 )
 
 app.include_router(resume_router)
-app.include_router(prefs_router)
+app.include_router(preferences_router)
+app.include_router(scan_router)
 
 @app.get("/health")
 def health():
