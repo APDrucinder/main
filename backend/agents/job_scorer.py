@@ -6,6 +6,7 @@ import asyncio
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from shared.base_agent import BaseAgent
+from shared.logger import logger
 from .resume_parser import ResumeData
 from .job_scraper import JobPosting
 
@@ -70,12 +71,11 @@ class JobScorer(BaseAgent):
         results = []
         for job in jobs[:max_jobs]:
             try:
-                # Note: Corrected call to self.score
                 m_score = await self.score(resume, job)
                 results.append((job, m_score))
-                print(f"Scored: {job.title} at {job.company} → {m_score.score}/100")
+                logger.info("Job scored", title=job.title, company=job.company, score=m_score.score)
             except Exception as e:
-                print(f"Scoring failed for {job.title}: {e}")
+                logger.warning("Job scoring failed", title=job.title, error=str(e))
                 continue
         results.sort(key=lambda x: x[1].score, reverse=True)
         return results
@@ -91,35 +91,35 @@ class JobScorer(BaseAgent):
 async def test():
     from .resume_parser import ResumeParser
     from .job_scraper import JobScraper
-    from .pre_filter import PreFilter # Imported the class correctly
+    from .pre_filter import PreFilter
     
-    print("--- STARTING TEST PIPELINE ---")
+    logger.info("Starting test pipeline")
     
-    # Setup Agents
     parser = ResumeParser()
     scraper = JobScraper()
-    pre_filter = PreFilter() # Instantiate the filter agent
+    pre_filter = PreFilter()
     scorer = JobScorer(apply_threshold=75)
 
-    # 1. Parse
     resume = await parser.parse("Dhruv_Resume.pdf")
     
-    # 2. Scrape
     jobs = scraper.scrape_all(roles=["software engineer"], locations=["Bangalore"], num_per_search=5)
     
-    # 3. Filter (FIXED: Using the PreFilter class method)
-    # Using filter_all instead of keyword_prefilter
     filtered_results = await pre_filter.filter_all(jobs, resume.skills)
     filtered_jobs = [res.job for res in filtered_results if res.passed]
     
-    print(f"Filter passed: {len(filtered_jobs)}/{len(jobs)}")
+    logger.info("Filter complete", passed=len(filtered_jobs), total=len(jobs))
     
-    # 4. Score
     results = await scorer.score_batch(resume, filtered_jobs, max_jobs=5)
     
     for job, s in results:
-        print(f"\n{job.title} ({job.company}) - Score: {s.score}")
-        print(f"Apply? {s.should_apply} | Reason: {s.reasoning}")
+        logger.info(
+            "Final score",
+            title=job.title,
+            company=job.company,
+            score=s.score,
+            should_apply=s.should_apply,
+            reasoning=s.reasoning,
+        )
 
 if __name__ == "__main__":
     asyncio.run(test())

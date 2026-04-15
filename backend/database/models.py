@@ -23,7 +23,7 @@ class Resume(Base):
     user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
     raw_text = Column(Text)
     parsed_data = Column(JSON)
-    storage_path = Column(String, nullable=True)
+    file_url = Column(String, nullable=True)
     uploaded_at = Column(DateTime, server_default=func.now())
 
 class JobPreference(Base):

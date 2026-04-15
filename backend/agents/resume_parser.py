@@ -8,6 +8,7 @@ import os
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from shared.base_agent import BaseAgent
+from shared.logger import logger
 
 class WorkExperience(BaseModel):
     company: str
@@ -67,10 +68,13 @@ class ResumeParser(BaseAgent):
         return "\n".join([para.text for para in doc.paragraphs if para.text.strip()])
     
     async def parse(self, file_path: str) -> ResumeData:
+        logger.info("Parsing resume", file_path=file_path)
         raw_text = self._extract_text(file_path)
         
         if not raw_text or len(raw_text) < 50:
             raise ValueError("Could not extract text. Please use a text-based PDF.")
+        
+        logger.debug("Text extracted from resume", char_count=len(raw_text))
         
         prompt = f"""
         TASK: Convert the Resume Text below into a SINGLE valid JSON object.
@@ -111,22 +115,26 @@ class ResumeParser(BaseAgent):
                     clean_response += "}"
                 data = json.loads(clean_response)
             except Exception as e:
-                print(f"--- DEBUG: RAW AI OUTPUT ---\n{response}\n---------------------------")
+                logger.error("AI returned invalid JSON", raw_output=response[:500], error=str(e))
                 raise Exception(f"AI returned invalid JSON: {e}")
 
-        return ResumeData(**data)
+        result = ResumeData(**data)
+        logger.info(
+            "Resume parsed successfully",
+            name=result.name,
+            skills_count=len(result.skills),
+            experience_years=result.total_experience_years,
+        )
+        return result
 
 async def test():
     parser = ResumeParser()
     result = await parser.parse("Dhruv_Resume.pdf")
     
-    print("\n--- PARSED RESUME ---")
-    print(f"Name: {result.name}")
-    print(f"Email: {result.email}")
-    print(f"Skills: {', '.join(result.skills[:5])}")
-    print(f"Experience: {result.total_experience_years} years")
-    print("--------------------\n")
-    print(result.model_dump_json(indent=2))
+    logger.info("Parsed resume", name=result.name, email=result.email)
+    logger.info("Top skills", skills=result.skills[:5])
+    logger.info("Experience", years=result.total_experience_years)
+    logger.info("Full output", data=result.model_dump_json(indent=2))
 
 if __name__ == "__main__":
     import asyncio

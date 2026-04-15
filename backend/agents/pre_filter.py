@@ -7,6 +7,7 @@ from typing import List
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from shared.base_agent import BaseAgent
+from shared.logger import logger
 from agents.job_scraper import JobPosting
 
 class PreFilterResult:
@@ -22,14 +23,12 @@ class PreFilter(BaseAgent):
 
     def __init__(self):
         super().__init__("pre_filter")
-        # FIX: Added a semaphore to limit concurrent LLM requests to 10 at a time.
-        # Adjust this number based on your specific LLM API rate limits.
+        # Semaphore to limit concurrent LLM requests to 10 at a time.
         self.semaphore = asyncio.Semaphore(10)
 
     async def filter_job(self, job: JobPosting, candidate_skills: List[str], pref_remote: bool = False) -> PreFilterResult:
-        # Convert the boolean to a readable string for the LLM
         remote_status = "Remote" if getattr(job, 'is_remote', False) else "On-site / Hybrid"
-        prompt = fprompt = f"""
+        prompt = f"""
 You are a strict job pre-filter. Given a job posting and a candidate's skills,
 decide if this job is worth sending to the candidate for a detailed review.
 
@@ -64,22 +63,28 @@ Respond ONLY in JSON. No explanation, no markdown.
                     missing_skills=parsed.get("missing_skills", [])
                 )
             except Exception as e:
-                print(f"  → LLM Error on '{job.title}': {e}")
+                logger.warning("LLM pre-filter failed for job", title=job.title, error=str(e))
                 return PreFilterResult(job=job, passed=False, reason="Evaluation failed", score=0)
 
     async def filter_all(self, jobs: List[JobPosting], candidate_skills: List[str], pref_remote: bool = False) -> List[PreFilterResult]:
-        print(f"\nPre-filtering {len(jobs)} jobs...")
+        logger.info("Starting pre-filter", total_jobs=len(jobs))
         
-        # Pass the pref_remote preference to every task
         tasks = [self.filter_job(job, candidate_skills, pref_remote) for job in jobs]
         results = await asyncio.gather(*tasks)
 
         for i, result in enumerate(results):
-            status = "✅ PASSED" if result.passed else "❌ FAILED"
-            # Show the remote status in the log
+            status = "PASSED" if result.passed else "FAILED"
             mode = "Remote" if result.job.is_remote else "On-site"
-            print(f"  [{i+1}/{len(jobs)}] {status} ({result.score}) — {result.job.company} ({mode}) | {result.reason}")
+            logger.info(
+                "Pre-filter result",
+                index=f"{i+1}/{len(jobs)}",
+                status=status,
+                score=result.score,
+                company=result.job.company,
+                mode=mode,
+                reason=result.reason,
+            )
 
         passed = [r for r in results if r.passed]
-        print(f"\nPre-filter done: {len(passed)}/{len(jobs)} jobs passed")
+        logger.info("Pre-filter complete", passed=len(passed), total=len(jobs))
         return results

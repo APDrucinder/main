@@ -1,0 +1,17 @@
+# Scraper CSS Selectors Configuration
+# ─────────────────────────────────────
+# Update these when job sites change their DOM structure.
+# No code changes required — just update the selectors below.
+#
+# Format: "tag.classname" (e.g., "div.job-card" → <div class="job-card">)
+
+naukri:
+  job_card_container: "div.srp-jobtuple-wrapper"
+  title_link: "a.title"
+  company_link: "a.comp-name"
+
+# Future platforms can be added here:
+# glassdoor:
+#   job_card_container: "li.react-job-listing"
+#   title_link: "a.job-title"
+#   company_link: "span.employer-name"

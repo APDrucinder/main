@@ -5,36 +5,37 @@ import os
 sys.path.append(os.path.dirname(__file__))
 from agents.job_scraper import JobScraper
 from agents.pre_filter import PreFilter
-from agents.resume_parser import ResumeParser  # <-- NEW IMPORT
+from agents.resume_parser import ResumeParser
+from shared.logger import logger
 
 # ─── CONFIG — edit these ───────────────────────────────────────
 ROLES       = ["software engineer", "python developer", "backend developer"]
 NUM_JOBS    = 10  # per role per location per platform
-RESUME_PATH = "Dhruv_Resume.pdf" # <-- Make sure this matches your file
+RESUME_PATH = "Dhruv_Resume.pdf"
 # ───────────────────────────────────────────────────────────────
 
 async def run_pipeline():
-    print("=" * 60)
-    print("      JOB PIPELINE — PARSE → SCRAPE → FILTER")
-    print("=" * 60)
+    logger.info("=" * 60)
+    logger.info("JOB PIPELINE — PARSE → SCRAPE → FILTER")
+    logger.info("=" * 60)
 
     # ---------------------------------------------------------
-    # NEW STEP 0 — Parse Resume
+    # STEP 0 — Parse Resume
     # ---------------------------------------------------------
-    print(f"\n📄 STEP 0: Parsing resume ({RESUME_PATH})...")
+    logger.info("STEP 0: Parsing resume", path=RESUME_PATH)
     parser = ResumeParser()
     try:
         resume = await parser.parse(RESUME_PATH)
         candidate_skills = resume.skills
-        print(f"  → Found {len(candidate_skills)} skills: {', '.join(candidate_skills)}")
+        logger.info("Resume parsed", skills_count=len(candidate_skills), skills=", ".join(candidate_skills))
     except Exception as e:
-        print(f"Failed to parse resume. Exiting.\nError: {e}")
+        logger.error("Failed to parse resume, exiting", error=str(e))
         return
 
     # ---------------------------------------------------------
     # LOCATION SETUP
     # ---------------------------------------------------------
-    print("\n🌍 LOCATION SETUP")
+    logger.info("LOCATION SETUP")
     loc_input = input("Enter locations separated by commas (or press Enter for default 'Bangalore, Mumbai'): ")
     if loc_input.strip():
         locations = [loc.strip() for loc in loc_input.split(',')]
@@ -44,7 +45,7 @@ async def run_pipeline():
     # ---------------------------------------------------------
     # Step 1 — Scrape
     # ---------------------------------------------------------
-    print(f"\n📥 STEP 1: Scraping jobs in {', '.join(locations)}...")
+    logger.info("STEP 1: Scraping jobs", locations=locations)
     scraper = JobScraper()
     jobs = scraper.scrape_all(
         roles=ROLES,
@@ -53,16 +54,14 @@ async def run_pipeline():
     )
 
     if not jobs:
-        print("No jobs found. Exiting.")
+        logger.warning("No jobs found. Exiting.")
         return
 
     # ---------------------------------------------------------
     # Step 2 — Pre-filter
     # ---------------------------------------------------------
-    print("\n🔍 STEP 2: Pre-filtering jobs with LLM...")
+    logger.info("STEP 2: Pre-filtering jobs with LLM")
     pre_filter = PreFilter()
-    
-    # NEW: Feeding your real extracted skills to the filter
     results = await pre_filter.filter_all(jobs, candidate_skills)
 
     # ---------------------------------------------------------
@@ -71,19 +70,13 @@ async def run_pipeline():
     passed = [r for r in results if r.passed]
     failed = [r for r in results if not r.passed]
 
-    print("\n" + "=" * 60)
-    print(f"  ✅ PASSED: {len(passed)} jobs")
-    print(f"  ❌ FAILED: {len(failed)} jobs")
-    print("=" * 60)
+    logger.info("Pipeline results", passed=len(passed), failed=len(failed))
 
     if passed:
-        # Sort by score descending
         passed.sort(key=lambda r: r.score, reverse=True)
 
-        print("\n🏆 TOP MATCHES:\n")
+        logger.info("TOP MATCHES:")
         for r in passed:
-            
-            # Safely determine the work method (Remote vs On-site)
             is_remote = getattr(r.job, 'is_remote', None)
             if is_remote is True:
                 work_method = "Remote"
@@ -92,15 +85,17 @@ async def run_pipeline():
             else:
                 work_method = getattr(r.job, 'job_type', 'Not specified')
 
-            print(f"  Score:    {r.score}/100")
-            print(f"  Title:    {r.job.title}")
-            print(f"  Company:  {r.job.company}")
-            print(f"  Location: {r.job.location}")
-            print(f"  Method:   {work_method}") 
-            print(f"  Source:   {r.job.source}")
-            print(f"  Reason:   {r.reason}")
-            print(f"  URL:      {r.job.apply_url}")
-            print("-" * 60)
+            logger.info(
+                "Match",
+                score=r.score,
+                title=r.job.title,
+                company=r.job.company,
+                location=r.job.location,
+                method=work_method,
+                source=r.job.source,
+                reason=r.reason,
+                url=r.job.apply_url,
+            )
 
 if __name__ == "__main__":
     asyncio.run(run_pipeline())
