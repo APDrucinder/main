@@ -4,6 +4,61 @@ import os
 from typing import Any, Dict, Optional
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeout
 
+# At top of base_ats.py
+import asyncio
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
+
+# In execute_apply_flow(), after fill_form() and before submit():
+def execute_apply_flow(self) -> bool:
+    self.logger.info("Starting application flow", dry_run=self.dry_run)
+    try:
+        self.upload_resume()
+        self._human_delay(2, 4)
+
+        self.fill_form()
+        self._human_delay(1, 3)
+
+        # ── NEW: Handle screening questions ──
+        self._handle_screening_questions()
+        self._human_delay(1, 2)
+
+        if self.dry_run:
+            self.logger.info("DRY RUN — skipping submit")
+            self._take_screenshot("dry_run_before_submit")
+            return True
+
+        self.submit()
+        self._human_delay(3, 6)
+
+        is_success = self.detect_success()
+        if is_success:
+            self.logger.info("Application submitted successfully")
+        else:
+            self.logger.warning("Could not verify submission success")
+            self._take_screenshot("unverified_success")
+        return is_success
+
+    except Exception as e:
+        self.logger.error("Application flow failed", error=str(e))
+        self._take_screenshot("error")
+        return False
+
+# Inside BaseATSHandler
+def _handle_screening_questions(self) -> None:
+    try:
+        from agents.screening_questions import ScreeningQuestionsAgent
+        agent = ScreeningQuestionsAgent()
+        
+        # NO asyncio.run() anymore! Call it directly.
+        results = agent.answer_screening_questions(
+            self.page, 
+            self.user_data.get("parsed_resume", {}), 
+            self.user_data.get("job_data", {})
+        )
+    except Exception as e:
+        self.logger.warning("Screening agent failed", error=str(e))
+
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from shared.logger import logger

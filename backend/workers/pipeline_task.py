@@ -15,6 +15,10 @@ DEFAULT_ROLES = ["software engineer", "python developer", "backend developer"]
 DEFAULT_LOCATIONS = ["Bangalore", "Mumbai"]
 DEFAULT_NUM_JOBS = 10
 
+# ── Feature flags (can be patched by tests/scripts) ──────────────
+AUTO_APPLY_ENABLED: bool = False
+AUTO_APPLY_DRY_RUN: bool = True
+
 
 async def fetch_user_preferences(user_id: str) -> dict:
     """Fetch user's JobPreference from DB. Returns defaults if none set."""
@@ -180,3 +184,209 @@ def run_pipeline_task(self, user_id: str, resume_path: str, locations: list = No
             for r in passed
         ]
     }
+
+
+async def execute_pipeline_task(
+    task,
+    user_id: str,
+    *,
+    resume_path: str,
+    locations: list = None,
+    pipeline_runner=None,
+    auto_apply_callable=None,
+) -> dict:
+    """
+    Plain (non-Celery) entry point used by verification scripts and tests.
+
+    Accepts injectable ``pipeline_runner`` and ``auto_apply_callable`` so that
+    fake data can be supplied without a real broker or resume file.
+
+    ``task`` must expose an ``update_state(state, meta)`` method (the Celery
+    task instance in production, or a :class:`FakeTask` in tests).
+    """
+    import sys
+    import os
+
+    # ── Step 0: Fetch preferences ──────────────────────────────────
+    task.update_state(state="STARTED", meta={"step": "loading_preferences"})
+    prefs = await fetch_user_preferences(user_id)
+
+    effective_locations = locations or prefs["locations"]
+    effective_roles = prefs["roles"]
+
+    logger.info(
+        "Pipeline starting (execute_pipeline_task)",
+        user_id=user_id,
+        roles=effective_roles,
+        locations=effective_locations,
+    )
+
+    # ── Step 1: Run pipeline (real or injected) ────────────────────
+    task.update_state(state="STARTED", meta={"step": "running_pipeline"})
+    if pipeline_runner is not None:
+        pipeline_result = await pipeline_runner(
+                user_id=user_id,
+                resume_path=resume_path,
+                roles=effective_roles,
+                locations=effective_locations,
+                prefs=prefs,
+            )
+    else:
+        # Real path: parse resume, scrape, pre-filter
+        task.update_state(state="STARTED", meta={"step": "parsing_resume"})
+        parser = ResumeParser()
+        resume = await parser.parse(resume_path)
+
+        task.update_state(state="STARTED", meta={"step": "scraping_jobs"})
+        scraper = JobScraper()
+        jobs = scraper.scrape_all(
+            roles=effective_roles,
+            locations=effective_locations,
+            num_per_search=DEFAULT_NUM_JOBS,
+        )
+
+        task.update_state(state="STARTED", meta={"step": "filtering_jobs"})
+        pre_filter = PreFilter()
+        results = await pre_filter.filter_all(jobs, resume.skills, pref_remote=prefs["remote_ok"])
+        passed = sorted([r for r in results if r.passed], key=lambda r: r.score, reverse=True)
+
+        pipeline_result = type("R", (), {
+            "resume": resume,
+            "scored_results": results,
+            "passed_results": passed,
+            "failed_results": [],
+        })()
+
+    passed_results = pipeline_result.passed_results
+    threshold = prefs.get("threshold", 75)
+
+    # ── Step 2: Auto-apply (if enabled) ───────────────────────────
+    apply_results: list[dict] = []
+    if AUTO_APPLY_ENABLED and passed_results:
+        task.update_state(state="STARTED", meta={"step": "auto_applying"})
+        resume_obj = pipeline_result.resume
+        user_data = {
+            "name": resume_obj.name,
+            "email": resume_obj.email,
+            "phone": resume_obj.phone,
+            "skills": resume_obj.skills,
+        }
+        for r in passed_results:
+            if r.score < threshold:
+                continue
+            callable_ = auto_apply_callable
+            if callable_ is None:
+                from agents.auto_apply import AutoApplier
+                # Real auto-apply requires a live Playwright page — skip here
+                logger.warning("No auto_apply_callable provided; skipping auto-apply", url=r.job.apply_url)
+                continue
+            result = callable_(
+                job_url=r.job.apply_url,
+                user_id=user_id,
+                job_id=uuid.uuid4(),
+                user_data=user_data,
+            )
+            apply_results.append({
+                "url": r.job.apply_url,
+                "success": result.success,
+                "manual_apply_url": result.manual_apply_url,
+                "failure_reason": result.failure_reason,
+            })
+
+    # ── Step 3: Save to DB ────────────────────────────────────────
+    task.update_state(state="STARTED", meta={"step": "saving_to_database"})
+
+    # Annotate each result with auto-apply outcome before saving
+    apply_map = {a["url"]: a for a in apply_results}
+    for r in pipeline_result.scored_results:
+        outcome = apply_map.get(r.job.apply_url)
+        if outcome:
+            r.auto_apply_status = "applied" if outcome["success"] else "failed"
+            r.manual_apply_url = outcome.get("manual_apply_url")
+        else:
+            r.auto_apply_status = None
+            r.manual_apply_url = None
+
+    await _save_results_with_status(user_id, pipeline_result.scored_results, threshold)
+
+    logger.info(
+        "execute_pipeline_task complete",
+        user_id=user_id,
+        total_scored=len(pipeline_result.scored_results),
+        total_applied=len([a for a in apply_results if a["success"]]),
+    )
+    return {
+        "status": "complete",
+        "total_scored": len(pipeline_result.scored_results),
+        "apply_results": apply_results,
+    }
+
+
+async def _save_results_with_status(user_id: str, results: list, threshold: float):
+    """Persist scored results, setting status based on auto-apply outcome."""
+    async with AsyncSessionLocal() as session:
+        try:
+            for r in results:
+                existing_job = await session.execute(
+                    select(Job).where(Job.apply_url == r.job.apply_url)
+                )
+                job_row = existing_job.scalar_one_or_none()
+
+                if job_row is None:
+                    job_row = Job(
+                        id=uuid.uuid4(),
+                        title=r.job.title,
+                        company=r.job.company,
+                        location=r.job.location,
+                        description=r.job.description,
+                        salary_range=r.job.salary_range,
+                        apply_url=r.job.apply_url,
+                        source=r.job.source,
+                        posted_date=r.job.posted_date,
+                    )
+                    session.add(job_row)
+                    await session.flush()
+
+                # Determine application status
+                auto_status = getattr(r, "auto_apply_status", None)
+                if auto_status == "applied":
+                    status = "applied"
+                elif auto_status == "failed":
+                    status = "failed"
+                elif r.score >= threshold:
+                    status = "matched"
+                else:
+                    status = "matched"
+
+                # Skip duplicate application rows for the same user+job
+                existing_app = await session.execute(
+                    select(Application).where(
+                        Application.user_id == uuid.UUID(user_id),
+                        Application.job_id == job_row.id,
+                    )
+                )
+                if existing_app.scalar_one_or_none() is not None:
+                    logger.debug("Application already exists, skipping", title=job_row.title)
+                    continue
+
+                application = Application(
+                    id=uuid.uuid4(),
+                    user_id=uuid.UUID(user_id),
+                    job_id=job_row.id,
+                    match_score=r.score,
+                    matched_skills=getattr(r, "matched_skills", []),
+                    missing_skills=getattr(r, "missing_skills", []),
+                    reasoning=r.reason,
+                    status=status,
+                    manual_apply_url=getattr(r, "manual_apply_url", None),
+                    applied_at=datetime.utcnow(),
+                )
+                session.add(application)
+                logger.info("Saved application", score=r.score, title=job_row.title, status=status)
+
+            await session.commit()
+            logger.info("Results saved", count=len(results))
+        except Exception as e:
+            await session.rollback()
+            logger.error("DB save failed", error=str(e))
+            raise

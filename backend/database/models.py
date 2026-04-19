@@ -64,5 +64,6 @@ class Application(Base):
     missing_skills = Column(ARRAY(String))
     reasoning = Column(Text)
     status = Column(String, default="applied")
+    manual_apply_url = Column(Text)
     applied_at = Column(DateTime, server_default=func.now())
     user_feedback = Column(String)
