@@ -47,6 +47,19 @@ USER_AGENTS = [
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0",
 ]
 
+BROWSER_HEADERS = {
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Accept-Encoding": "gzip, deflate, br",
+    "Connection": "keep-alive",
+    "Upgrade-Insecure-Requests": "1",
+    "Sec-Fetch-Dest": "document",
+    "Sec-Fetch-Mode": "navigate",
+    "Sec-Fetch-Site": "none",
+    "Sec-Fetch-User": "?1",
+    "Cache-Control": "max-age=0",
+}
+
 # ─── In-memory rate limit tracker ─────────────────────────────
 # Format: { user_id: {"count": int, "last_applied": datetime, "date": date} }
 _application_tracker: dict = {}
@@ -152,7 +165,6 @@ class AutoApplier:
         return proxy
 
     def _resolve_external_redirects(self, url: str) -> str:
-        """Unroll tracking URLs to find actual ATS domain."""
         proxy = self._get_next_proxy()
         proxies = {"http": proxy, "https": proxy} if proxy else None
 
@@ -162,7 +174,10 @@ class AutoApplier:
                 allow_redirects=True,
                 timeout=10,
                 proxies=proxies,
-                headers={"User-Agent": random.choice(USER_AGENTS)}
+                headers={
+                    **BROWSER_HEADERS,
+                    "User-Agent": random.choice(USER_AGENTS)
+                }
             )
             return response.url
         except requests.RequestException as e:
@@ -224,6 +239,16 @@ class AutoApplier:
         except Exception:
             pass
 
+    def _set_realistic_headers(self) -> None:
+        try:
+            self.page.set_extra_http_headers({
+                **BROWSER_HEADERS,
+                "User-Agent": random.choice(USER_AGENTS)
+            })
+            logger.debug("Realistic headers set")
+        except Exception as e:
+            logger.warning("Could not set headers", error=str(e))
+
     # ─── Retry Logic ──────────────────────────────────────────
 
     def _apply_with_retry(
@@ -248,6 +273,7 @@ class AutoApplier:
                 )
 
                 # Anti-detection: set user agent + scroll before interacting
+                self._set_realistic_headers()
                 self._set_random_user_agent()
 
                 # Navigate to page

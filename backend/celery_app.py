@@ -1,25 +1,18 @@
-# backend/workers/celery_app.py
-
 from celery import Celery
+from celery.schedules import crontab
 import os
-from pathlib import Path
 from dotenv import load_dotenv
 import ssl
 
-# Explicitly point to the .env file
-env_path = Path(__file__).parent.parent / ".env"
-load_dotenv(dotenv_path=env_path)
+load_dotenv()
 
-REDIS_URL = os.getenv("REDIS_URL")
-
-if not REDIS_URL:
-    raise ValueError("REDIS_URL is missing from .env")
+REDIS_URL = os.getenv("REDIS_URL") or os.getenv("UPSTASH_REDIS_URL")
 
 celery_app = Celery(
     "aiagents",
     broker=REDIS_URL,
     backend=REDIS_URL,
-    include=["workers.tasks"]
+    include=["workers.tasks", "workers.digest_task"]
 )
 
 celery_app.conf.update(
@@ -33,4 +26,15 @@ celery_app.conf.update(
     redis_backend_use_ssl={
         "ssl_cert_reqs": ssl.CERT_NONE
     },
+    # ── Celery Beat Schedule ──
+    beat_schedule={
+        "daily-digest-7pm": {
+            "task": "workers.digest_task.send_daily_digest",
+            "schedule": crontab(hour=19, minute=0),  # 7:00 PM UTC every day
+        }
+    },
+    timezone="UTC",
 )
+
+# Export both names so existing code still works
+celery = celery_app
