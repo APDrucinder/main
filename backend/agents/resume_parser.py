@@ -32,6 +32,13 @@ class ResumeData(BaseModel):
     education: List[Education]
     projects: List[str]
     total_experience_years: Optional[float] = None
+    # Fields used by AutoApplyBot — parsed from resume when present
+    location: Optional[str] = None
+    linkedin_url: Optional[str] = None
+    portfolio_url: Optional[str] = None
+    current_company: Optional[str] = None
+    # Set externally after upload — NOT parsed from resume text
+    file_url: Optional[str] = None
 
 class ResumeParser(BaseAgent):
     
@@ -88,6 +95,10 @@ class ResumeParser(BaseAgent):
             "name": "string",
             "email": "string",
             "phone": "string",
+            "location": "string or null",
+            "linkedin_url": "string or null",
+            "portfolio_url": "string or null",
+            "current_company": "string or null (most recent employer)",
             "skills": ["string"],
             "experience": [{{ "company": "string", "role": "string", "duration": "string", "description": "string" }}],
             "education": [{{ "institution": "string", "degree": "string", "field": "string", "year": "string", "cgpa": 0.0 }}],

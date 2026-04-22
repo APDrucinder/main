@@ -2,7 +2,7 @@ from sqlalchemy import (
     Column, String, Integer, Boolean,
     DateTime, JSON, ForeignKey, ARRAY, Text
 )
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 from .connection import Base
 import uuid
@@ -15,6 +15,7 @@ class User(Base):
     email = Column(String, unique=True, nullable=False)
     subscription_tier = Column(String, default="free")
     created_at = Column(DateTime, server_default=func.now())
+    platform_credentials = Column(JSONB, default=dict, nullable=True)
 
 class Resume(Base):
     __tablename__ = "resumes"
@@ -63,7 +64,8 @@ class Application(Base):
     matched_skills = Column(ARRAY(String))
     missing_skills = Column(ARRAY(String))
     reasoning = Column(Text)
-    status = Column(String, default="applied")
+    status = Column(String, default="matched")
+    platform = Column(String(50), nullable=True)   # "indeed", "greenhouse", "lever", etc.
     manual_apply_url = Column(Text)
     applied_at = Column(DateTime, server_default=func.now())
     user_feedback = Column(String)
