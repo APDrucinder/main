@@ -69,3 +69,12 @@ class Application(Base):
     manual_apply_url = Column(Text)
     applied_at = Column(DateTime, server_default=func.now())
     user_feedback = Column(String)
+
+class  UserApplicationStats(Base):
+    __tablename__ = "user_application_stats"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"), nullable=False)
+    date=Column(DateTime, server_default=func.now())
+    applications_count=Column(Integer, default=0)
+    
