@@ -3,8 +3,8 @@ import os
 import asyncio
 import json
 from datetime import datetime
-from agents.pipeline import JobApplicationPipeline
-from agents.pre_filter import UserPreferences
+from pipeline import JobApplicationPipeline
+from pipeline import UserPreferences
 from database.connection import AsyncSessionLocal
 from database.models import Application, Job
 from sqlalchemy import select
@@ -12,7 +12,7 @@ from sqlalchemy import select
 # ============================================
 # CONFIGURE THIS BEFORE RUNNING
 # ============================================
-TEST_RESUME_PATH = "test_resume.pdf"
+TEST_RESUME_PATH = "Dhruv_Resume.pdf"
 # Put your actual resume here
 
 TEST_PREFERENCES = UserPreferences(
