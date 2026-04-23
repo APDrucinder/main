@@ -9,9 +9,7 @@ from pydantic import BaseModel
 from typing import List, Optional, Dict
 from datetime import datetime
 import pandas as pd
-import sys
 
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from shared.base_agent import BaseAgent
 from shared.logger import logger
 
@@ -194,6 +192,8 @@ class JobScraper(BaseAgent):
                     posted_date=row.get('date_posted') if pd.notna(row.get('date_posted')) else None,
                     is_remote=bool(row.get('is_remote', False))
                 )
+                if not job.apply_url:
+                    continue
                 jobs.append(job)
             except Exception:
                 continue

@@ -1,149 +1,160 @@
-import asyncio
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type
-)
-from langfuse import Langfuse
-import sentry_sdk
+from __future__ import annotations
 
-langfuse = Langfuse()
+import asyncio
+
+from shared.logger import logger
+
+try:
+    import sentry_sdk
+except ImportError:  # pragma: no cover
+    sentry_sdk = None
+
+try:
+    from langfuse import Langfuse
+except ImportError:  # pragma: no cover
+    Langfuse = None
+
+langfuse = Langfuse() if Langfuse else None
+
 
 class ApplicationTimeoutError(Exception):
     pass
 
+
 class ApplicationRetryableError(Exception):
     pass
+
 
 async def apply_with_timeout(
     auto_apply_func,
     job,
     resume_path: str,
-    timeout_seconds: int = 90
+    timeout_seconds: int = 90,
 ) -> dict:
-    
     try:
-        result = await asyncio.wait_for(
-            auto_apply_func(job, resume_path),
-            timeout=timeout_seconds
-        )
-        return result
-        
+        return await asyncio.wait_for(auto_apply_func(job, resume_path), timeout=timeout_seconds)
     except asyncio.TimeoutError:
-        print(f"Timeout after {timeout_seconds}s: "
-              f"{job.title} at {job.company}")
-        
+        logger.warning(
+            "Application attempt timed out",
+            timeout_seconds=timeout_seconds,
+            title=getattr(job, "title", "unknown"),
+            company=getattr(job, "company", "unknown"),
+        )
         return {
             "success": False,
             "reason": "timeout",
             "job_url": job.apply_url,
-            "manual_apply_url": job.apply_url
+            "manual_apply_url": job.apply_url,
         }
+
 
 async def apply_with_retry(
     auto_apply_func,
     job,
     resume_path: str,
     max_attempts: int = 2,
-    timeout_seconds: int = 90
+    timeout_seconds: int = 90,
 ) -> dict:
-    
-    trace = langfuse.trace(
-        name="auto_apply_with_retry",
-        input={
-            "job_title": job.title,
-            "company": job.company,
-            "url": job.apply_url
-        }
-    )
-    
+    trace = None
+    if langfuse:
+        trace = langfuse.trace(
+            name="auto_apply_with_retry",
+            input={"job_title": job.title, "company": job.company, "url": job.apply_url},
+        )
+
     last_result = None
-    
+
     for attempt in range(1, max_attempts + 1):
-        
-        print(f"Attempt {attempt}/{max_attempts}: "
-              f"{job.title} at {job.company}")
-        
+        logger.info(
+            "Auto-apply attempt",
+            attempt=attempt,
+            max_attempts=max_attempts,
+            title=job.title,
+            company=job.company,
+        )
+
         try:
             result = await apply_with_timeout(
                 auto_apply_func,
                 job,
                 resume_path,
-                timeout_seconds
+                timeout_seconds,
             )
-            
-            if result["success"]:
-                trace.update(
-                    output={"success": True,
-                            "attempt": attempt}
-                )
+
+            if result.get("success"):
+                if trace:
+                    trace.update(output={"success": True, "attempt": attempt})
                 return result
-            
-            # Don't retry these failure modes
-            # — they won't succeed on retry
-            non_retryable = [
+
+            non_retryable = {
                 "external_apply",
                 "captcha",
                 "login_required",
-                "unsupported_ats"
-            ]
-            
+                "unsupported_ats",
+                "unsupported_platform",
+                "no_credentials",
+            }
+
             if result.get("reason") in non_retryable:
-                trace.update(
-                    output={
-                        "success": False,
-                        "reason": result["reason"],
-                        "retried": False
-                    }
-                )
+                if trace:
+                    trace.update(
+                        output={
+                            "success": False,
+                            "reason": result.get("reason"),
+                            "retried": False,
+                        }
+                    )
                 return result
-            
+
             last_result = result
-            
             if attempt < max_attempts:
                 wait_time = attempt * 5
-                # 5 seconds before retry
-                print(f"Retrying in {wait_time}s...")
+                logger.info("Retrying auto-apply", wait_seconds=wait_time)
                 await asyncio.sleep(wait_time)
-                
-        except Exception as e:
-            sentry_sdk.capture_exception(e)
+
+        except Exception as exc:
+            if sentry_sdk:
+                sentry_sdk.capture_exception(exc)
             last_result = {
                 "success": False,
-                "reason": f"unexpected_error: {str(e)}",
+                "reason": f"unexpected_error: {str(exc)}",
                 "job_url": job.apply_url,
-                "manual_apply_url": job.apply_url
+                "manual_apply_url": job.apply_url,
             }
-            
+
             if attempt < max_attempts:
                 await asyncio.sleep(5)
-    
-    # All attempts failed
-    trace.update(
-        output={
-            "success": False,
-            "reason": last_result.get("reason"),
-            "attempts": max_attempts
-        }
+
+    if trace:
+        trace.update(
+            output={
+                "success": False,
+                "reason": (last_result or {}).get("reason"),
+                "attempts": max_attempts,
+            }
+        )
+
+    logger.warning(
+        "All auto-apply retries failed",
+        title=getattr(job, "title", "unknown"),
+        attempts=max_attempts,
     )
-    
-    print(f"All {max_attempts} attempts failed: "
-          f"{job.title}")
-    
-    return last_result
 
+    return last_result or {
+        "success": False,
+        "reason": "unknown_failure",
+        "job_url": job.apply_url,
+        "manual_apply_url": job.apply_url,
+    }
 
-# Add this to pipeline.py
-# Replace direct auto_apply call with this:
 
 async def safe_apply(job, resume_path):
     from agents.auto_apply import auto_apply
-    
+
     return await apply_with_retry(
         auto_apply_func=auto_apply,
         job=job,
         resume_path=resume_path,
         max_attempts=2,
-        timeout_seconds=90
+        timeout_seconds=90,
     )

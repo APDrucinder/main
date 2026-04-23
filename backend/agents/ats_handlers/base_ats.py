@@ -1,85 +1,32 @@
+from __future__ import annotations
+
 import abc
-import time
 import os
+import random
+import time
 from typing import Any, Dict, Optional
+
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeout
 
-# At top of base_ats.py
-import asyncio
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
-
-# In execute_apply_flow(), after fill_form() and before submit():
-def execute_apply_flow(self) -> bool:
-    self.logger.info("Starting application flow", dry_run=self.dry_run)
-    try:
-        self.upload_resume()
-        self._human_delay(2, 4)
-
-        self.fill_form()
-        self._human_delay(1, 3)
-
-        # ── NEW: Handle screening questions ──
-        self._handle_screening_questions()
-        self._human_delay(1, 2)
-
-        if self.dry_run:
-            self.logger.info("DRY RUN — skipping submit")
-            self._take_screenshot("dry_run_before_submit")
-            return True
-
-        self.submit()
-        self._human_delay(3, 6)
-
-        is_success = self.detect_success()
-        if is_success:
-            self.logger.info("Application submitted successfully")
-        else:
-            self.logger.warning("Could not verify submission success")
-            self._take_screenshot("unverified_success")
-        return is_success
-
-    except Exception as e:
-        self.logger.error("Application flow failed", error=str(e))
-        self._take_screenshot("error")
-        return False
-
-# Inside BaseATSHandler
-def _handle_screening_questions(self) -> None:
-    try:
-        from agents.screening_questions import ScreeningQuestionsAgent
-        agent = ScreeningQuestionsAgent()
-        
-        # NO asyncio.run() anymore! Call it directly.
-        results = agent.answer_screening_questions(
-            self.page, 
-            self.user_data.get("parsed_resume", {}), 
-            self.user_data.get("job_data", {})
-        )
-    except Exception as e:
-        self.logger.warning("Screening agent failed", error=str(e))
-
-import sys
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(__file__))))
 from shared.logger import logger
 
-# Screenshots directory
-SCREENSHOT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logs", "screenshots")
+SCREENSHOT_DIR = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+    "logs",
+    "screenshots",
+)
 os.makedirs(SCREENSHOT_DIR, exist_ok=True)
 
 
 class BaseATSHandler(abc.ABC):
     """
-    Base class for all ATS handlers. Uses Playwright for browser automation.
-    
-    Every handler must implement:
-        - fill_form()       → Fill text inputs, dropdowns, checkboxes
-        - upload_resume()   → Handle file upload interaction
-        - submit()          → Final review and submission click
-        - detect_success()  → Verify the application was received
-    
-    The execute_apply_flow() template method governs execution order
-    and supports dry_run mode for safe testing.
+    Base class for ATS handlers using Playwright.
+
+    Required methods:
+    - fill_form
+    - upload_resume
+    - submit
+    - detect_success
     """
 
     def __init__(self, page: Page, user_data: Dict[str, Any], dry_run: bool = False):
@@ -89,47 +36,41 @@ class BaseATSHandler(abc.ABC):
         self.handler_name = self.__class__.__name__
         self.logger = logger.bind(handler=self.handler_name)
 
-    # ─── Abstract Methods ────────────────────────────────────
-
     @abc.abstractmethod
     def fill_form(self) -> None:
-        """Handles filling out standard text inputs, dropdowns, and checkboxes."""
         pass
 
     @abc.abstractmethod
     def upload_resume(self) -> None:
-        """Handles the file upload interaction."""
         pass
 
     @abc.abstractmethod
     def submit(self) -> None:
-        """Handles the final review and submission clicks."""
         pass
 
     @abc.abstractmethod
     def detect_success(self) -> bool:
-        """Verifies if the application was actually received."""
         pass
 
-    # ─── Template Method ─────────────────────────────────────
-
     def execute_apply_flow(self) -> bool:
-        """Template method governing the strict order of execution."""
         self.logger.info("Starting application flow", dry_run=self.dry_run)
         try:
             self.upload_resume()
-            self._human_delay(2, 4)
+            self._human_delay(1.5, 3.0)
 
             self.fill_form()
-            self._human_delay(1, 3)
+            self._human_delay(1.0, 2.5)
+
+            self._handle_screening_questions()
+            self._human_delay(0.5, 1.5)
 
             if self.dry_run:
-                self.logger.info("DRY RUN — skipping submit")
+                self.logger.info("DRY RUN enabled, skipping submit")
                 self._take_screenshot("dry_run_before_submit")
                 return True
 
             self.submit()
-            self._human_delay(3, 6)
+            self._human_delay(2.0, 4.0)
 
             is_success = self.detect_success()
             if is_success:
@@ -139,15 +80,26 @@ class BaseATSHandler(abc.ABC):
                 self._take_screenshot("unverified_success")
             return is_success
 
-        except Exception as e:
-            self.logger.error("Application flow failed", error=str(e))
+        except Exception as exc:
+            self.logger.error("Application flow failed", error=str(exc))
             self._take_screenshot("error")
             return False
 
-    # ─── Safe Interaction Helpers ────────────────────────────
+    def _handle_screening_questions(self) -> None:
+        """Best-effort screening question support, disabled on failures."""
+        try:
+            from agents.screening_questions import ScreeningQuestionsAgent
+
+            agent = ScreeningQuestionsAgent()
+            agent.answer_screening_questions(
+                self.page,
+                self.user_data.get("parsed_resume", {}),
+                self.user_data.get("job_data", {}),
+            )
+        except Exception as exc:
+            self.logger.debug("Screening agent skipped", error=str(exc))
 
     def _safe_fill(self, selector: str, value: str, timeout: int = 10000) -> bool:
-        """Wait for element, clear it, and type value. Returns True on success."""
         try:
             locator = self.page.locator(selector).first
             locator.wait_for(state="visible", timeout=timeout)
@@ -158,12 +110,11 @@ class BaseATSHandler(abc.ABC):
         except PlaywrightTimeout:
             self.logger.warning("Field not found (timeout)", selector=selector)
             return False
-        except Exception as e:
-            self.logger.warning("Failed to fill field", selector=selector, error=str(e))
+        except Exception as exc:
+            self.logger.warning("Failed to fill field", selector=selector, error=str(exc))
             return False
 
     def _safe_click(self, selector: str, timeout: int = 10000) -> bool:
-        """Wait for element and click it. Returns True on success."""
         try:
             locator = self.page.locator(selector).first
             locator.wait_for(state="visible", timeout=timeout)
@@ -173,12 +124,11 @@ class BaseATSHandler(abc.ABC):
         except PlaywrightTimeout:
             self.logger.warning("Element not found for click (timeout)", selector=selector)
             return False
-        except Exception as e:
-            self.logger.warning("Failed to click element", selector=selector, error=str(e))
+        except Exception as exc:
+            self.logger.warning("Failed to click element", selector=selector, error=str(exc))
             return False
 
     def _safe_click_text(self, text: str, timeout: int = 10000) -> bool:
-        """Click an element by its visible text content."""
         try:
             locator = self.page.get_by_text(text, exact=False).first
             locator.wait_for(state="visible", timeout=timeout)
@@ -188,12 +138,11 @@ class BaseATSHandler(abc.ABC):
         except PlaywrightTimeout:
             self.logger.warning("Text element not found", text=text)
             return False
-        except Exception as e:
-            self.logger.warning("Failed to click text element", text=text, error=str(e))
+        except Exception as exc:
+            self.logger.warning("Failed to click text element", text=text, error=str(exc))
             return False
 
     def _safe_upload(self, selector: str, file_path: str, timeout: int = 10000) -> bool:
-        """Upload a file to a file input element."""
         if not os.path.exists(file_path):
             self.logger.error("Resume file not found", path=file_path)
             return False
@@ -206,12 +155,11 @@ class BaseATSHandler(abc.ABC):
         except PlaywrightTimeout:
             self.logger.warning("File input not found (timeout)", selector=selector)
             return False
-        except Exception as e:
-            self.logger.warning("Failed to upload file", selector=selector, error=str(e))
+        except Exception as exc:
+            self.logger.warning("Failed to upload file", selector=selector, error=str(exc))
             return False
 
     def _select_dropdown(self, selector: str, value: str, timeout: int = 10000) -> bool:
-        """Select an option from a <select> dropdown by value or label."""
         try:
             locator = self.page.locator(selector).first
             locator.wait_for(state="visible", timeout=timeout)
@@ -222,12 +170,16 @@ class BaseATSHandler(abc.ABC):
             try:
                 locator.select_option(value=value)
                 return True
-            except Exception as e:
-                self.logger.warning("Failed to select dropdown", selector=selector, value=value, error=str(e))
+            except Exception as exc:
+                self.logger.warning(
+                    "Failed to select dropdown",
+                    selector=selector,
+                    value=value,
+                    error=str(exc),
+                )
                 return False
 
     def _wait_for(self, selector: str, timeout: int = 15000, state: str = "visible") -> bool:
-        """Wait for an element to reach a state. Returns True if found."""
         try:
             self.page.locator(selector).first.wait_for(state=state, timeout=timeout)
             return True
@@ -235,40 +187,31 @@ class BaseATSHandler(abc.ABC):
             return False
 
     def _element_exists(self, selector: str) -> bool:
-        """Check if an element exists on the page (no waiting)."""
         return self.page.locator(selector).count() > 0
 
     def _get_text(self, selector: str) -> Optional[str]:
-        """Get text content of an element, or None if not found."""
         try:
             locator = self.page.locator(selector).first
             return locator.text_content()
         except Exception:
             return None
 
-    # ─── Utilities ───────────────────────────────────────────
-
     def _human_delay(self, min_sec: float = 1.0, max_sec: float = 3.0) -> None:
-        """Randomized delay to mimic human interaction speed."""
-        import random
-        delay = random.uniform(min_sec, max_sec)
-        time.sleep(delay)
+        time.sleep(random.uniform(min_sec, max_sec))
 
     def _take_screenshot(self, label: str = "failure") -> None:
-        """Save a screenshot for debugging."""
         timestamp = time.strftime("%Y%m%d-%H%M%S")
         filename = f"{self.handler_name}_{label}_{timestamp}.png"
         filepath = os.path.join(SCREENSHOT_DIR, filename)
         try:
             self.page.screenshot(path=filepath, full_page=True)
             self.logger.info("Screenshot saved", path=filepath)
-        except Exception as e:
-            self.logger.warning("Failed to save screenshot", error=str(e))
+        except Exception as exc:
+            self.logger.warning("Failed to save screenshot", error=str(exc))
 
     def _get_resume_path(self) -> str:
-        """Get resume file path from user_data."""
-        return self.user_data.get("resume_path", "")
+        return str(self.user_data.get("resume_path", ""))
 
     def _get_user_field(self, field: str, default: str = "") -> str:
-        """Safely get a field from user_data."""
-        return self.user_data.get(field, default)
+        value = self.user_data.get(field, default)
+        return "" if value is None else str(value)

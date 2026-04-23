@@ -1,18 +1,27 @@
+import os
+import ssl
+
 from celery import Celery
 from celery.schedules import crontab
-import os
 from dotenv import load_dotenv
-import ssl
 
 load_dotenv()
 
 REDIS_URL = os.getenv("REDIS_URL") or os.getenv("UPSTASH_REDIS_URL")
+if not REDIS_URL:
+    raise ValueError("REDIS_URL or UPSTASH_REDIS_URL is required for Celery")
+
+ssl_cert_reqs_env = os.getenv("REDIS_SSL_CERT_REQS", "required").lower()
+ssl_cert_reqs = ssl.CERT_REQUIRED if ssl_cert_reqs_env == "required" else ssl.CERT_NONE
+
+use_tls = REDIS_URL.startswith("rediss://")
+ssl_options = {"ssl_cert_reqs": ssl_cert_reqs} if use_tls else None
 
 celery_app = Celery(
     "aiagents",
     broker=REDIS_URL,
     backend=REDIS_URL,
-    include=["workers.tasks", "workers.digest_task"]
+    include=["workers.tasks", "workers.digest_task"],
 )
 
 celery_app.conf.update(
@@ -20,21 +29,15 @@ celery_app.conf.update(
     result_serializer="json",
     accept_content=["json"],
     task_track_started=True,
-    broker_use_ssl={
-        "ssl_cert_reqs": ssl.CERT_NONE
-    },
-    redis_backend_use_ssl={
-        "ssl_cert_reqs": ssl.CERT_NONE
-    },
-    # ── Celery Beat Schedule ──
+    broker_use_ssl=ssl_options,
+    redis_backend_use_ssl=ssl_options,
     beat_schedule={
         "daily-digest-7pm": {
             "task": "workers.digest_task.send_daily_digest",
-            "schedule": crontab(hour=19, minute=0),  # 7:00 PM UTC every day
+            "schedule": crontab(hour=19, minute=0),
         }
     },
-    timezone="UTC",
+    timezone=os.getenv("CELERY_TIMEZONE", "UTC"),
 )
 
-# Export both names so existing code still works
 celery = celery_app

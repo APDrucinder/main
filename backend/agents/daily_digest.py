@@ -8,21 +8,14 @@ Scheduled via Celery Beat at 7pm every day.
 
 import asyncio
 import os
-import sys
+import uuid
 from datetime import datetime, timedelta
-from typing import Optional
 
-import sendgrid
-from sendgrid.helpers.mail import Mail, To
-from twilio.rest import Client as TwilioClient
-
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from shared.base_agent import BaseAgent
 from shared.logger import logger
 from database.connection import AsyncSessionLocal
 from database.models import Application, Job, User
 from sqlalchemy import select
-from sqlalchemy.orm import joinedload
 
 # ─── Config ───────────────────────────────────────────────────
 SENDGRID_API_KEY = os.getenv("SENDGRID_API_KEY")
@@ -39,8 +32,23 @@ class DailyDigestAgent(BaseAgent):
 
     def __init__(self):
         super().__init__("daily_digest")
-        self.sg = sendgrid.SendGridAPIClient(api_key=SENDGRID_API_KEY)
-        self.twilio = TwilioClient(TWILIO_SID, TWILIO_TOKEN) if TWILIO_SID else None
+        self.sg = None
+        if SENDGRID_API_KEY:
+            try:
+                import sendgrid
+
+                self.sg = sendgrid.SendGridAPIClient(api_key=SENDGRID_API_KEY)
+            except Exception as exc:
+                logger.warning("SendGrid SDK unavailable, email digest disabled", error=str(exc))
+
+        self.twilio = None
+        if TWILIO_SID and TWILIO_TOKEN:
+            try:
+                from twilio.rest import Client as TwilioClient
+
+                self.twilio = TwilioClient(TWILIO_SID, TWILIO_TOKEN)
+            except Exception as exc:
+                logger.warning("Twilio SDK unavailable, WhatsApp digest disabled", error=str(exc))
 
     # ─── Main Runner ──────────────────────────────────────────
 
@@ -98,13 +106,14 @@ class DailyDigestAgent(BaseAgent):
 
     async def _fetch_recent_applications(self, user_id: str) -> list:
         """Get all applications from last 24 hours for a user."""
+        user_uuid = uuid.UUID(str(user_id))
         cutoff = datetime.utcnow() - timedelta(hours=24)
 
         async with AsyncSessionLocal() as session:
             result = await session.execute(
                 select(Application, Job)
                 .join(Job, Application.job_id == Job.id)
-                .where(Application.user_id == user_id)
+                .where(Application.user_id == user_uuid)
                 .where(Application.applied_at >= cutoff)
                 .order_by(Application.match_score.desc())
             )
@@ -233,7 +242,12 @@ Separate the two versions with exactly this line:
 
     def _send_email(self, to_email: str, html_content: str) -> None:
         """Send digest email via SendGrid."""
+        if not self.sg:
+            logger.warning("SendGrid not configured, skipping digest email", to=to_email)
+            return
         try:
+            from sendgrid.helpers.mail import Mail
+
             message = Mail(
                 from_email=SENDGRID_FROM,
                 to_emails=to_email,

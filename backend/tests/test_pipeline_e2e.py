@@ -3,6 +3,7 @@ import os
 import asyncio
 import json
 from datetime import datetime
+import pytest
 from pipeline import JobApplicationPipeline
 from pipeline import UserPreferences
 from database.connection import AsyncSessionLocal
@@ -29,7 +30,11 @@ TEST_PREFERENCES = UserPreferences(
 TEST_USER_ID = "test-user-123"
 # ============================================
 
+@pytest.mark.asyncio
 async def test_full_pipeline():
+    if os.getenv("RUN_E2E_TESTS", "false").lower() != "true":
+        pytest.skip("Set RUN_E2E_TESTS=true to run integration pipeline test")
+
     
     print("\n" + "="*60)
     print("FULL PIPELINE END TO END TEST")
@@ -222,6 +227,9 @@ async def test_full_pipeline():
     print("="*60)
     print(f"Finished at: {datetime.now()}")
     
+    if results["errors"]:
+        raise AssertionError(f"E2E pipeline errors: {results['errors']}")
+
     return results
 
 if __name__ == "__main__":

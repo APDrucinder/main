@@ -4,7 +4,7 @@ from datetime import datetime
 
 from sqlalchemy import select
 
-from workers.celery_app import celery_app          # was: from celery_app import celery  ← was broken
+from workers.celery_app import celery_app
 from agents.job_scraper import JobScraper
 from agents.pre_filter import PreFilter
 from agents.resume_parser import ResumeParser
@@ -24,17 +24,25 @@ AUTO_APPLY_ENABLED: bool = os.getenv("AUTO_APPLY_ENABLED", "true").lower() == "t
 AUTO_APPLY_DRY_RUN: bool = os.getenv("AUTO_APPLY_DRY_RUN", "false").lower() == "true"
 
 
+def _parse_user_uuid(user_id: str) -> uuid.UUID:
+    try:
+        return uuid.UUID(str(user_id))
+    except ValueError as exc:
+        raise ValueError(f"user_id must be a valid UUID: {user_id}") from exc
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # DB helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
 async def fetch_user_preferences(user_id: str) -> dict:
     """Fetch user's active JobPreference row. Returns defaults if none found."""
+    user_uuid = _parse_user_uuid(user_id)
     async with AsyncSessionLocal() as session:
         try:
             result = await session.execute(
                 select(JobPreference).where(
-                    JobPreference.user_id == uuid.UUID(user_id),
+                    JobPreference.user_id == user_uuid,
                     JobPreference.is_active == True,
                 )
             )
@@ -73,11 +81,12 @@ async def fetch_resume_file_url(user_id: str) -> str | None:
     The bot downloads this URL to get the PDF for file upload fields.
     Returns None if the user has no resume uploaded yet.
     """
+    user_uuid = _parse_user_uuid(user_id)
     async with AsyncSessionLocal() as session:
         try:
             result = await session.execute(
                 select(Resume)
-                .where(Resume.user_id == uuid.UUID(user_id))
+                .where(Resume.user_id == user_uuid)
                 .order_by(Resume.uploaded_at.desc())
                 .limit(1)
             )
@@ -97,12 +106,19 @@ async def fetch_platform_credentials(user_id: str):
     status and skip cleanly when this returns None.
     """
     from agents.auto_apply import PlatformCredentials
+    user_uuid = _parse_user_uuid(user_id)
     async with AsyncSessionLocal() as session:
         try:
             result = await session.execute(
-                select(User).where(User.clerk_id == user_id)
+                select(User).where(User.id == user_uuid)
             )
             user_row = result.scalar_one_or_none()
+            if not user_row:
+                # Backward compatibility: older environments may pass clerk_id.
+                legacy_result = await session.execute(
+                    select(User).where(User.clerk_id == user_id)
+                )
+                user_row = legacy_result.scalar_one_or_none()
             if not user_row:
                 return None
             raw = getattr(user_row, "platform_credentials", None)
@@ -131,6 +147,7 @@ async def save_results_to_db(user_id: str, results: list, threshold: float):
       matched           — above threshold, auto-apply not attempted
       below_threshold   — scored but below user's threshold
     """
+    user_uuid = _parse_user_uuid(user_id)
     async with AsyncSessionLocal() as session:
         try:
             for r in results:
@@ -159,7 +176,7 @@ async def save_results_to_db(user_id: str, results: list, threshold: float):
                 # ── Skip duplicate application rows ─────────────────────
                 existing_app = await session.execute(
                     select(Application).where(
-                        Application.user_id == uuid.UUID(user_id),
+                        Application.user_id == user_uuid,
                         Application.job_id == job_row.id,
                     )
                 )
@@ -186,7 +203,7 @@ async def save_results_to_db(user_id: str, results: list, threshold: float):
 
                 application = Application(
                     id=uuid.uuid4(),
-                    user_id=uuid.UUID(user_id),
+                    user_id=user_uuid,
                     job_id=job_row.id,
                     match_score=r.score,
                     matched_skills=getattr(r, "matched_skills", []),
@@ -306,7 +323,7 @@ async def run_auto_apply(
             "url":      r.job.apply_url,
             "platform": result.platform,
             "success":  success,
-            "status":   result.status,
+            "status":   result.status.value,
             "reason":   result.reason if not success else None,
         })
 
@@ -356,20 +373,16 @@ def run_pipeline_task(self, user_id: str, resume_path: str, locations: list = No
 
     # ── Step 1: Parse resume ──────────────────────────────────────────
     self.update_state(state="STARTED", meta={"step": "parsing_resume"})
-    parser     = ResumeParser()
-    resume_obj = asyncio.run(parser.parse(resume_path))
-
-    # Fetch Supabase URL separately — resume_path is the local/tmp file path
-    # used by the parser; file_url is the permanent Supabase URL for the bot
-    resume_file_url    = asyncio.run(fetch_resume_file_url(user_id))
-    resume_obj.file_url = resume_file_url
-
-    if not resume_file_url:
-        logger.warning(
-            "No Supabase file_url found — auto-apply will be skipped. "
-            "Ensure resume upload endpoint saves file_url to resumes table.",
-            user_id=user_id,
+    parser = ResumeParser()
+    resume_file_url = asyncio.run(fetch_resume_file_url(user_id))
+    resume_source = resume_path or resume_file_url
+    if not resume_source:
+        raise ValueError(
+            "No resume provided. Upload a resume first or pass resume_path to the task."
         )
+
+    resume_obj = asyncio.run(parser.parse(resume_source))
+    resume_obj.file_url = resume_file_url or resume_source
 
     logger.info("Resume parsed", name=resume_obj.name, skills=len(resume_obj.skills))
 
@@ -396,12 +409,13 @@ def run_pipeline_task(self, user_id: str, resume_path: str, locations: list = No
 
     # ── Step 4: Auto-apply ────────────────────────────────────────────
     apply_results: list[dict] = []
+    resume_for_apply = resume_file_url or resume_path
     if AUTO_APPLY_ENABLED and passed and not AUTO_APPLY_DRY_RUN:
         self.update_state(state="STARTED", meta={"step": "auto_applying"})
         user_data   = build_user_data(resume_obj, prefs)
         credentials = asyncio.run(fetch_platform_credentials(user_id))
         apply_results = asyncio.run(
-            run_auto_apply(passed, user_id, user_data, resume_file_url, credentials, threshold)
+            run_auto_apply(passed, user_id, user_data, resume_for_apply, credentials, threshold)
         )
     elif AUTO_APPLY_DRY_RUN:
         logger.info("DRY RUN — skipping browser submissions", user_id=user_id)
@@ -457,6 +471,7 @@ async def execute_pipeline_task(
     """
 
     task.update_state(state="STARTED", meta={"step": "loading_preferences"})
+    _parse_user_uuid(user_id)
     prefs               = await fetch_user_preferences(user_id)
     effective_locations = locations or prefs["locations"]
     effective_roles     = prefs["roles"]
@@ -473,11 +488,15 @@ async def execute_pipeline_task(
             prefs=prefs,
         )
     else:
-        parser     = ResumeParser()
-        resume_obj = await parser.parse(resume_path)
-
-        resume_file_url     = await fetch_resume_file_url(user_id)
-        resume_obj.file_url = resume_file_url
+        parser = ResumeParser()
+        resume_file_url = await fetch_resume_file_url(user_id)
+        resume_source = resume_path or resume_file_url
+        if not resume_source:
+            raise ValueError(
+                "No resume provided. Upload a resume first or pass resume_path to the task."
+            )
+        resume_obj = await parser.parse(resume_source)
+        resume_obj.file_url = resume_file_url or resume_source
 
         scraper = JobScraper()
         jobs    = scraper.scrape_all(

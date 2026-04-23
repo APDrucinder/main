@@ -1,80 +1,83 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
+from uuid import UUID, uuid4
+
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.concurrency import run_in_threadpool
-from database.storage import upload_resume
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.auth import assert_user_scope, get_current_user_id
 from database.connection import get_db
 from database.models import Resume
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-import uuid
+from database.storage import upload_resume
 
 router = APIRouter(prefix="/resume", tags=["resume"])
 
-ALLOWED_TYPES = [
-    "application/pdf",
-    "application/msword",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-]
+ALLOWED_TYPES = {
+    "application/pdf": ".pdf",
+    "application/msword": ".doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": ".docx",
+}
 
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
+
 @router.post("/upload")
 async def upload_resume_endpoint(
-    user_id: str,
+    user_id: UUID,
     file: UploadFile = File(...),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user_id: UUID = Depends(get_current_user_id),
 ):
-    # Validate file type
-    if file.content_type not in ALLOWED_TYPES:
-        raise HTTPException(
-            status_code=400,
-            detail="Only PDF and Word files accepted"
-        )
-    
-    # Read file
+    assert_user_scope(current_user_id, user_id)
+
+    suffix = ALLOWED_TYPES.get(file.content_type)
+    if not suffix:
+        raise HTTPException(status_code=400, detail="Only PDF and Word files accepted")
+
     file_bytes = await file.read()
-    
-    # Validate file size
     if len(file_bytes) > MAX_FILE_SIZE:
-        raise HTTPException(
-            status_code=400,
-            detail="File too large. Maximum 5MB."
+        raise HTTPException(status_code=400, detail="File too large. Maximum 5MB.")
+
+    filename = f"{uuid4()}{suffix}"
+
+    try:
+        file_url = await run_in_threadpool(
+            upload_resume,
+            file_bytes=file_bytes,
+            filename=filename,
+            user_id=str(user_id),
+            content_type=file.content_type,
         )
-    
-    suffix = ".pdf" if "pdf" in file.content_type else ".docx"
-    filename = f"{uuid.uuid4()}{suffix}"
-    
-    # Run the synchronous Supabase upload in a threadpool to prevent blocking FastAPI
-    file_url = await run_in_threadpool(
-        upload_resume,
-        file_bytes=file_bytes,
-        filename=filename,
-        user_id=user_id
-    )
-    
-    # Save record to database
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail="Failed to upload resume file") from exc
+
     resume_record = Resume(
         user_id=user_id,
         file_url=file_url,
-        raw_text=None,    
-        parsed_data=None  
+        raw_text=None,
+        parsed_data=None,
     )
-    
+
     db.add(resume_record)
-    await db.commit() # CRITICAL FIX: Actually save to the database!
-    await db.refresh(resume_record) # Refresh to safely get the generated ID
-    
+    await db.commit()
+    await db.refresh(resume_record)
+
     return {
         "resume_id": str(resume_record.id),
         "file_url": file_url,
         "status": "uploaded",
-        "message": "Resume uploaded. Parsing will begin shortly."
+        "message": "Resume uploaded. Parsing will begin shortly.",
     }
+
 
 @router.get("/{user_id}")
 async def get_resume(
-    user_id: str,
-    db: AsyncSession = Depends(get_db)
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: UUID = Depends(get_current_user_id),
 ):
+    assert_user_scope(current_user_id, user_id)
+
     result = await db.execute(
         select(Resume)
         .where(Resume.user_id == user_id)
@@ -82,16 +85,13 @@ async def get_resume(
         .limit(1)
     )
     resume = result.scalar_one_or_none()
-    
+
     if not resume:
-        raise HTTPException(
-            status_code=404,
-            detail="No resume found for this user"
-        )
-    
+        raise HTTPException(status_code=404, detail="No resume found for this user")
+
     return {
         "resume_id": str(resume.id),
         "file_url": resume.file_url,
         "parsed_data": resume.parsed_data,
-        "uploaded_at": resume.uploaded_at
+        "uploaded_at": resume.uploaded_at.isoformat() if resume.uploaded_at else None,
     }

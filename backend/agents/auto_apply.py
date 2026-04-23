@@ -1,391 +1,278 @@
-import logging
-import requests
+from __future__ import annotations
+
+import asyncio
 import os
-import sys
-import time
 import random
-from datetime import datetime, timedelta
-from typing import Optional
+import tempfile
+from enum import Enum
+from pathlib import Path
+from typing import Any, Optional
 from urllib.parse import urlparse
-from playwright.sync_api import Page
 
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from database.storage import save_to_manual_queue
-from shared.logger import logger
-from ats_handlers import (
-    WorkdayHandler,
-    GreenhouseHandler,
+import requests
+from pydantic import BaseModel, ConfigDict
+
+from agents.ats_handlers import (
     DarwinboxHandler,
-    KekaHandler,
-    ZohoHandler,
-    NaukriHandler,
+    GreenhouseHandler,
     IndeedHandler,
-    LinkedInHandler
+    KekaHandler,
+    LinkedInHandler,
+    NaukriHandler,
+    WorkdayHandler,
+    ZohoHandler,
 )
+from shared.logger import logger
 
-# ─── Constants ────────────────────────────────────────────────
-MAX_APPLICATIONS_PER_DAY = 30
-MIN_GAP_BETWEEN_APPLICATIONS_MINUTES = 10
-MAX_RETRIES = 2
-RETRY_DELAY_SECONDS = 30
 
-# ─── Proxy Pool ───────────────────────────────────────────────
-# Add your proxies here in format: "http://user:pass@host:port"
-PROXY_LIST = [
-    os.getenv("PROXY_1", ""),
-    os.getenv("PROXY_2", ""),
-    os.getenv("PROXY_3", ""),
-]
-PROXY_LIST = [p for p in PROXY_LIST if p]  # Remove empty ones
-
-# ─── User Agent Pool ──────────────────────────────────────────
 USER_AGENTS = [
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 13_1) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.1 Safari/605.1.15",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/119.0",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
 ]
 
-BROWSER_HEADERS = {
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Connection": "keep-alive",
-    "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "none",
-    "Sec-Fetch-User": "?1",
-    "Cache-Control": "max-age=0",
-}
 
-# ─── In-memory rate limit tracker ─────────────────────────────
-# Format: { user_id: {"count": int, "last_applied": datetime, "date": date} }
-_application_tracker: dict = {}
+class ApplyStatus(str, Enum):
+    SUCCESS = "applied"
+    CAPTCHA = "captcha"
+    NO_CREDENTIALS = "no_credentials"
+    LOGIN_FAILED = "login_failed"
+    UNSUPPORTED_PLATFORM = "unsupported_platform"
+    FAILED = "failed"
 
 
-class RateLimitExceeded(Exception):
-    pass
+class PlatformCredentials(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
+    workday_email: Optional[str] = None
+    workday_password: Optional[str] = None
+    linkedin_email: Optional[str] = None
+    linkedin_password: Optional[str] = None
+    indeed_email: Optional[str] = None
+    indeed_password: Optional[str] = None
+    naukri_email: Optional[str] = None
+    naukri_password: Optional[str] = None
 
 
-class AutoApplier:
-    """
-    Routes job URLs to the correct ATS handler.
-    Includes: proxy rotation, user agent rotation, rate limiting,
-    random scroll behaviour, retry logic.
-    """
+class ApplyResult(BaseModel):
+    status: ApplyStatus
+    platform: str
+    reason: Optional[str] = None
 
-    def __init__(self, page: Page, user_data: dict, dry_run: bool = False):
-        self.page = page
-        self.user_data = user_data
+
+class AutoApplyBot:
+    """Routes a job URL to a platform handler and executes the apply flow."""
+
+    _ROUTING_TABLE = {
+        "myworkdayjobs.com": ("workday", WorkdayHandler),
+        "greenhouse.io": ("greenhouse", GreenhouseHandler),
+        "darwinbox": ("darwinbox", DarwinboxHandler),
+        "keka.com": ("keka", KekaHandler),
+        "zoho.com/recruit": ("zoho", ZohoHandler),
+        "naukri.com": ("naukri", NaukriHandler),
+        "indeed.com": ("indeed", IndeedHandler),
+        "linkedin.com": ("linkedin", LinkedInHandler),
+    }
+
+    _CREDENTIAL_REQUIRED_PLATFORMS = {"workday"}
+
+    def __init__(
+        self,
+        *,
+        headless: bool = True,
+        debug: bool = False,
+        dry_run: bool = False,
+        navigation_timeout_ms: int = 45000,
+    ):
+        self.headless = headless
+        self.debug = debug
         self.dry_run = dry_run
-        self._proxy_index = 0
+        self.navigation_timeout_ms = navigation_timeout_ms
 
-        self.routing_table = {
-            "myworkdayjobs.com": WorkdayHandler,
-            "greenhouse.io": GreenhouseHandler,
-            "darwinbox.": DarwinboxHandler,
-            "keka.com": KekaHandler,
-            "zoho.com/recruit": ZohoHandler,
-            "naukri.com": NaukriHandler,
-            "indeed.com": IndeedHandler,
-            "linkedin.com": LinkedInHandler,
-        }
-
-    # ─── Rate Limiting ────────────────────────────────────────
-
-    def _check_rate_limits(self, user_id: str) -> None:
-        """
-        Enforces:
-        - Max 30 applications per day per user
-        - Min 10 minute gap between applications
-        Raises RateLimitExceeded if either limit is hit.
-        """
-        today = datetime.utcnow().date()
-        tracker = _application_tracker.get(user_id)
-
-        if tracker:
-            # Reset count if it's a new day
-            if tracker["date"] != today:
-                _application_tracker[user_id] = {
-                    "count": 0,
-                    "last_applied": None,
-                    "date": today
-                }
-                tracker = _application_tracker[user_id]
-
-            # Check daily limit
-            if tracker["count"] >= MAX_APPLICATIONS_PER_DAY:
-                raise RateLimitExceeded(
-                    f"Daily limit of {MAX_APPLICATIONS_PER_DAY} applications reached for user {user_id}"
-                )
-
-            # Check minimum gap
-            if tracker["last_applied"]:
-                elapsed = datetime.utcnow() - tracker["last_applied"]
-                min_gap = timedelta(minutes=MIN_GAP_BETWEEN_APPLICATIONS_MINUTES)
-                if elapsed < min_gap:
-                    wait_seconds = (min_gap - elapsed).seconds
-                    raise RateLimitExceeded(
-                        f"Too soon. Wait {wait_seconds // 60}m {wait_seconds % 60}s before next application."
-                    )
-        else:
-            _application_tracker[user_id] = {
-                "count": 0,
-                "last_applied": None,
-                "date": today
-            }
-
-    def _record_application(self, user_id: str) -> None:
-        """Increment counter and update last_applied timestamp."""
-        tracker = _application_tracker.setdefault(user_id, {
-            "count": 0,
-            "last_applied": None,
-            "date": datetime.utcnow().date()
-        })
-        tracker["count"] += 1
-        tracker["last_applied"] = datetime.utcnow()
-        logger.info(
-            "Application recorded",
-            user_id=user_id,
-            count=tracker["count"],
-            limit=MAX_APPLICATIONS_PER_DAY
+    async def apply(
+        self,
+        *,
+        job_url: str,
+        user_data: dict[str, Any],
+        resume_url: str,
+        credentials: PlatformCredentials | None,
+    ) -> ApplyResult:
+        return await asyncio.to_thread(
+            self._apply_sync,
+            job_url,
+            user_data,
+            resume_url,
+            credentials,
         )
 
-    # ─── Proxy Rotation ───────────────────────────────────────
+    def _apply_sync(
+        self,
+        job_url: str,
+        user_data: dict[str, Any],
+        resume_url: str,
+        credentials: PlatformCredentials | None,
+    ) -> ApplyResult:
+        final_url = self._resolve_external_redirects(job_url)
+        platform, handler_class = self._resolve_handler(final_url)
 
-    def _get_next_proxy(self) -> Optional[str]:
-        """Round-robin through proxy list. Returns None if no proxies configured."""
-        if not PROXY_LIST:
-            return None
-        proxy = PROXY_LIST[self._proxy_index % len(PROXY_LIST)]
-        self._proxy_index += 1
-        logger.debug("Using proxy", proxy=proxy.split("@")[-1])  # Log host only, not credentials
-        return proxy
+        if not handler_class:
+            return ApplyResult(
+                status=ApplyStatus.UNSUPPORTED_PLATFORM,
+                platform="unknown",
+                reason=f"No ATS handler for URL: {final_url}",
+            )
+
+        if platform in self._CREDENTIAL_REQUIRED_PLATFORMS and not self._has_platform_credentials(
+            platform, credentials
+        ):
+            return ApplyResult(
+                status=ApplyStatus.NO_CREDENTIALS,
+                platform=platform,
+                reason=f"{platform} credentials missing",
+            )
+
+        resume_path: Optional[str] = None
+        browser = None
+        context = None
+
+        try:
+            resume_path = self._materialize_resume(resume_url)
+            enriched_user_data = self._build_user_data(user_data, resume_path, credentials)
+
+            from playwright.sync_api import sync_playwright
+
+            with sync_playwright() as playwright:
+                browser = playwright.chromium.launch(headless=self.headless)
+                context = browser.new_context(user_agent=random.choice(USER_AGENTS))
+                page = context.new_page()
+                page.goto(final_url, wait_until="domcontentloaded", timeout=self.navigation_timeout_ms)
+
+                handler = handler_class(page=page, user_data=enriched_user_data, dry_run=self.dry_run)
+                success = handler.execute_apply_flow()
+
+                if success:
+                    return ApplyResult(status=ApplyStatus.SUCCESS, platform=platform)
+
+                return ApplyResult(
+                    status=ApplyStatus.FAILED,
+                    platform=platform,
+                    reason="Handler reported unsuccessful apply flow",
+                )
+
+        except Exception as exc:
+            logger.error(
+                "Auto-apply failed",
+                platform=platform,
+                url=final_url,
+                error=str(exc),
+            )
+            return ApplyResult(status=ApplyStatus.FAILED, platform=platform, reason=str(exc))
+        finally:
+            if context is not None:
+                try:
+                    context.close()
+                except Exception:
+                    pass
+            if browser is not None:
+                try:
+                    browser.close()
+                except Exception:
+                    pass
+
+            if resume_path and resume_path.startswith(tempfile.gettempdir()):
+                try:
+                    Path(resume_path).unlink(missing_ok=True)
+                except Exception:
+                    pass
 
     def _resolve_external_redirects(self, url: str) -> str:
-        proxy = self._get_next_proxy()
-        proxies = {"http": proxy, "https": proxy} if proxy else None
-
         try:
             response = requests.head(
                 url,
                 allow_redirects=True,
-                timeout=10,
-                proxies=proxies,
-                headers={
-                    **BROWSER_HEADERS,
-                    "User-Agent": random.choice(USER_AGENTS)
-                }
+                timeout=15,
+                headers={"User-Agent": random.choice(USER_AGENTS)},
             )
-            return response.url
-        except requests.RequestException as e:
-            logger.warning("Redirect resolution failed", url=url, error=str(e))
-            return url
+            if response.url:
+                return response.url
+        except requests.RequestException as exc:
+            logger.warning("Redirect resolution failed", url=url, error=str(exc))
+        return url
 
-    # ─── Anti-Detection ───────────────────────────────────────
+    def _resolve_handler(self, url: str):
+        url_lower = url.lower()
+        for signature, handler in self._ROUTING_TABLE.items():
+            if signature in url_lower:
+                return handler
+        return "unknown", None
 
-    def _set_random_user_agent(self) -> None:
-        """Set a random user agent on the page context."""
-        try:
-            agent = random.choice(USER_AGENTS)
-            self.page.evaluate(f"""
-                Object.defineProperty(navigator, 'userAgent', {{
-                    get: () => '{agent}'
-                }});
-            """)
-            logger.debug("User agent set", agent=agent[:50])
-        except Exception as e:
-            logger.warning("Could not set user agent", error=str(e))
-
-    def _random_scroll(self) -> None:
-        """
-        Perform realistic random scroll behaviour before clicking anything.
-        Scrolls down slowly, pauses, scrolls back up slightly.
-        """
-        try:
-            # Get page height
-            page_height = self.page.evaluate("document.body.scrollHeight")
-
-            # Scroll down in chunks with random pauses
-            scroll_steps = random.randint(3, 6)
-            for i in range(scroll_steps):
-                scroll_to = int((page_height / scroll_steps) * (i + 1) * random.uniform(0.7, 1.0))
-                self.page.evaluate(f"window.scrollTo({{top: {scroll_to}, behavior: 'smooth'}})")
-                time.sleep(random.uniform(0.4, 1.2))
-
-            # Pause at bottom
-            time.sleep(random.uniform(1.0, 2.5))
-
-            # Scroll back up slightly (like a human re-reading)
-            scroll_back = int(page_height * random.uniform(0.1, 0.3))
-            self.page.evaluate(f"window.scrollTo({{top: {scroll_back}, behavior: 'smooth'}})")
-            time.sleep(random.uniform(0.5, 1.5))
-
-            logger.debug("Random scroll complete", steps=scroll_steps)
-        except Exception as e:
-            logger.warning("Random scroll failed", error=str(e))
-
-    def _random_mouse_movement(self) -> None:
-        """Move mouse to a random position to simulate human presence."""
-        try:
-            viewport = self.page.viewport_size
-            if viewport:
-                x = random.randint(100, viewport["width"] - 100)
-                y = random.randint(100, viewport["height"] - 100)
-                self.page.mouse.move(x, y)
-                time.sleep(random.uniform(0.2, 0.6))
-        except Exception:
-            pass
-
-    def _set_realistic_headers(self) -> None:
-        try:
-            self.page.set_extra_http_headers({
-                **BROWSER_HEADERS,
-                "User-Agent": random.choice(USER_AGENTS)
-            })
-            logger.debug("Realistic headers set")
-        except Exception as e:
-            logger.warning("Could not set headers", error=str(e))
-
-    # ─── Retry Logic ──────────────────────────────────────────
-
-    def _apply_with_retry(
+    def _has_platform_credentials(
         self,
-        handler_class,
-        final_url: str,
-        user_id: str,
-        job_id: str
+        platform: str,
+        credentials: PlatformCredentials | None,
     ) -> bool:
-        """
-        Try to apply up to MAX_RETRIES times.
-        On failure, wait RETRY_DELAY_SECONDS before retrying.
-        """
-        for attempt in range(1, MAX_RETRIES + 1):
-            try:
-                logger.info(
-                    "Application attempt",
-                    attempt=attempt,
-                    max=MAX_RETRIES,
-                    handler=handler_class.__name__,
-                    url=final_url
-                )
-
-                # Anti-detection: set user agent + scroll before interacting
-                self._set_realistic_headers()
-                self._set_random_user_agent()
-
-                # Navigate to page
-                self.page.goto(final_url, wait_until="domcontentloaded")
-                time.sleep(random.uniform(1.5, 3.0))
-
-                # Scroll before clicking anything
-                self._random_scroll()
-                self._random_mouse_movement()
-
-                # Initialize handler and run apply flow
-                handler = handler_class(
-                    page=self.page,
-                    user_data=self.user_data,
-                    dry_run=self.dry_run,
-                )
-
-                success = handler.execute_apply_flow()
-
-                if success:
-                    logger.info(
-                        "Application succeeded",
-                        attempt=attempt,
-                        handler=handler_class.__name__
-                    )
-                    return True
-                else:
-                    logger.warning(
-                        "Application attempt failed, will retry",
-                        attempt=attempt,
-                        handler=handler_class.__name__
-                    )
-
-            except Exception as e:
-                logger.error(
-                    "Application attempt threw exception",
-                    attempt=attempt,
-                    error=str(e),
-                    handler=handler_class.__name__
-                )
-
-            # Wait before retrying (not after last attempt)
-            if attempt < MAX_RETRIES:
-                logger.info("Waiting before retry", delay=RETRY_DELAY_SECONDS)
-                time.sleep(RETRY_DELAY_SECONDS)
-
-        logger.error(
-            "All retry attempts exhausted",
-            handler=handler_class.__name__,
-            url=final_url
-        )
-        return False
-
-    # ─── Main Entry Point ─────────────────────────────────────
-
-    def process_job(self, job_url: str, user_id: str, job_id: str) -> bool:
-        """
-        Determines ATS, enforces rate limits, runs anti-detection,
-        executes application with retry logic.
-        """
-
-        # ── Step 1: Rate limit check ──
-        try:
-            self._check_rate_limits(user_id)
-        except RateLimitExceeded as e:
-            logger.warning("Rate limit hit", user_id=user_id, reason=str(e))
+        if not credentials:
             return False
+        if platform == "workday":
+            return bool(credentials.workday_email and credentials.workday_password)
+        return True
 
-        # ── Step 2: Resolve redirects with proxy ──
-        final_url = self._resolve_external_redirects(job_url)
-        final_url_lower = final_url.lower()
+    def _build_user_data(
+        self,
+        base_user_data: dict[str, Any],
+        resume_path: str,
+        credentials: PlatformCredentials | None,
+    ) -> dict[str, Any]:
+        user_data = dict(base_user_data)
+        user_data["resume_path"] = resume_path
 
-        # ── Step 3: Match ATS handler ──
-        matched_handler = None
-        for domain_signature, handler_class in self.routing_table.items():
-            if domain_signature in final_url_lower:
-                matched_handler = handler_class
-                logger.info(
-                    "Routing to handler",
-                    handler=handler_class.__name__,
-                    url=final_url,
-                    dry_run=self.dry_run,
-                )
-                break
+        if credentials:
+            user_data.update(credentials.model_dump(exclude_none=True))
+            # Handler compatibility aliases
+            if credentials.workday_password:
+                user_data.setdefault("workday_password", credentials.workday_password)
+            if credentials.workday_email:
+                user_data.setdefault("workday_email", credentials.workday_email)
 
-        # ── Step 4: No handler matched → manual queue ──
-        if not matched_handler:
-            logger.warning("No ATS handler matched", url=final_url)
-            self._save_to_manual_queue(user_id, job_id)
-            return False
+        return user_data
 
-        # ── Step 5: Apply with retry + anti-detection ──
-        success = self._apply_with_retry(matched_handler, final_url, user_id, job_id)
+    def _materialize_resume(self, resume_source: str) -> str:
+        if not resume_source:
+            raise ValueError("resume_url is required for auto-apply")
 
-        # ── Step 6: Record application if successful ──
-        if success and not self.dry_run:
-            self._record_application(user_id)
+        parsed = urlparse(resume_source)
+        if parsed.scheme in {"http", "https"}:
+            return self._download_resume(resume_source)
 
-        return success
+        path = Path(resume_source).expanduser().resolve()
+        if not path.exists() or not path.is_file():
+            raise FileNotFoundError(f"Resume file not found: {path}")
+        return str(path)
 
-    def _save_to_manual_queue(self, user_id: str, job_id: str) -> None:
-        save_to_manual_queue(user_id, job_id)
-        logger.info("Job flagged for manual queue", user_id=user_id, job_id=job_id)
+    def _download_resume(self, url: str) -> str:
+        response = requests.get(url, timeout=30)
+        response.raise_for_status()
 
-    # ─── Utility: Current stats ───────────────────────────────
+        suffix = Path(urlparse(url).path).suffix or ".pdf"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
+            temp_file.write(response.content)
+            return temp_file.name
 
-    def get_usage_stats(self, user_id: str) -> dict:
-        """Return current application count and rate limit info for a user."""
-        tracker = _application_tracker.get(user_id, {})
-        return {
-            "applications_today": tracker.get("count", 0),
-            "daily_limit": MAX_APPLICATIONS_PER_DAY,
-            "last_applied": tracker.get("last_applied"),
-            "min_gap_minutes": MIN_GAP_BETWEEN_APPLICATIONS_MINUTES,
-        }
+
+async def auto_apply(job, resume_path: str) -> dict[str, Any]:
+    """Backward-compatible helper used by older retry wrappers."""
+    bot = AutoApplyBot(headless=True, debug=False, dry_run=False)
+    result = await bot.apply(
+        job_url=job.apply_url,
+        user_data={},
+        resume_url=resume_path,
+        credentials=None,
+    )
+    return {
+        "success": result.status == ApplyStatus.SUCCESS,
+        "reason": None if result.status == ApplyStatus.SUCCESS else result.reason,
+        "status": result.status.value,
+        "platform": result.platform,
+        "job_url": job.apply_url,
+        "manual_apply_url": job.apply_url,
+    }
