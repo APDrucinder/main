@@ -8,16 +8,10 @@ Handles: text inputs, textareas, dropdowns, radio buttons.
 Flags sensitive or unclear questions for user review instead of guessing.
 """
 
-import os
-import sys
+import asyncio
 import time
 from typing import Optional, List, Dict, Any
 from playwright.sync_api import Page
-
-# Setup paths
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-if BASE_DIR not in sys.path:
-    sys.path.append(BASE_DIR)
 
 from shared.base_agent import BaseAgent
 from shared.logger import logger
@@ -65,6 +59,10 @@ class ScreeningAnswer:
 class ScreeningQuestionsAgent(BaseAgent):
     def __init__(self):
         super().__init__("screening_questions")
+
+    def _call_llm_sync(self, prompt: str, max_tokens: int = 100) -> str:
+        """Sync wrapper used by Playwright sync handlers."""
+        return asyncio.run(self._call_llm(prompt=prompt, max_tokens=max_tokens))
 
     # ─── Main Entry (Now Synchronous) ─────────────────────────
 

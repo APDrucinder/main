@@ -1,12 +1,17 @@
-# backend/database/init_db.py
+from __future__ import annotations
 
 import asyncio
-from connection import engine, Base
-import models  # triggers model registration
 
-async def init():
+from database.connection import Base, engine
+from database import models  # noqa: F401  # Ensure model metadata is registered.
+from shared.logger import logger
+
+
+async def init() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
-    print("All tables created in Neon.")
+    logger.info("Database tables ensured")
 
-asyncio.run(init())
+
+if __name__ == "__main__":
+    asyncio.run(init())

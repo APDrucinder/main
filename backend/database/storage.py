@@ -1,55 +1,78 @@
-from supabase import create_client
 import os
-from dotenv import load_dotenv
-import sys
+from typing import Optional
 
-sys.path.append(os.path.dirname(os.path.dirname(__file__)))
+from dotenv import load_dotenv
+from typing import Any
+
 from shared.logger import logger
 
 load_dotenv()
 
-supabase = create_client(
-    os.getenv("SUPABASE_URL"),
-    os.getenv("SUPABASE_SERVICE_KEY")
-)
+_supabase_client: Optional[Any] = None
 
-# Changed to standard 'def' because the supabase client is synchronous
+
+def _get_supabase_client():
+    global _supabase_client
+    if _supabase_client is not None:
+        return _supabase_client
+
+    supabase_url = os.getenv("SUPABASE_URL")
+    supabase_service_key = os.getenv("SUPABASE_SERVICE_KEY")
+
+    if not supabase_url or not supabase_service_key:
+        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be configured")
+
+    from supabase import create_client
+
+    _supabase_client = create_client(supabase_url, supabase_service_key)
+    return _supabase_client
+
+
 def upload_resume(
     file_bytes: bytes,
     filename: str,
-    user_id: str
+    user_id: str,
+    content_type: str,
 ) -> str:
-    
+    client = _get_supabase_client()
     file_path = f"resumes/{user_id}/{filename}"
-    
-    # Upload to Supabase storage
-    supabase.storage.from_("resumes").upload(
-        file_path, 
+
+    client.storage.from_("resumes").upload(
+        file_path,
         file_bytes,
-        {"content-type": "application/pdf"}
+        {"content-type": content_type},
     )
-    
-    # Get public URL
-    url = supabase.storage.from_("resumes").get_public_url(file_path)
-    
-    return url
+
+    return client.storage.from_("resumes").get_public_url(file_path)
+
 
 def save_to_manual_queue(user_id: str, job_id: str):
     """
     Inserts a record into the applications table with a manual_queue status.
     Uses the Supabase client directly.
     """
+    client = _get_supabase_client()
+
     try:
-       
-        response = supabase.table("applications").insert({
-            "user_id": user_id,
-            "job_id": job_id,
-            "status": "manual_queue",
-            "reasoning": "No ATS handler matched for URL"
-        }).execute()
-        
+        response = (
+            client.table("applications")
+            .insert(
+                {
+                    "user_id": user_id,
+                    "job_id": job_id,
+                    "status": "manual_queue",
+                    "reasoning": "No ATS handler matched for URL",
+                }
+            )
+            .execute()
+        )
         return response
-        
+
     except Exception as e:
-        logger.error("Failed to save to manual queue", user_id=user_id, job_id=job_id, error=str(e))
+        logger.error(
+            "Failed to save to manual queue",
+            user_id=user_id,
+            job_id=job_id,
+            error=str(e),
+        )
         return None

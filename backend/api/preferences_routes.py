@@ -1,39 +1,40 @@
-from fastapi import APIRouter, HTTPException, Depends
+from typing import List
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.auth import assert_user_scope, get_current_user_id
 from database.connection import get_db
 from database.models import JobPreference
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from pydantic import BaseModel
-from typing import List
 
-router = APIRouter(
-    prefix="/preferences", 
-    tags=["preferences"]
-)
+router = APIRouter(prefix="/preferences", tags=["preferences"])
+
 
 class PreferencesInput(BaseModel):
-    target_roles: List[str]
-    locations: List[str]
-    experience_years: int
-    salary_min: int = 0
+    target_roles: List[str] = Field(default_factory=list)
+    locations: List[str] = Field(default_factory=list)
+    experience_years: int = Field(ge=0)
+    salary_min: int = Field(default=0, ge=0)
     remote_ok: bool = False
-    auto_apply_threshold: int = 75
+    auto_apply_threshold: int = Field(default=75, ge=0, le=100)
+
 
 @router.post("/{user_id}")
 async def save_preferences(
-    user_id: str,
+    user_id: UUID,
     preferences: PreferencesInput,
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
+    current_user_id: UUID = Depends(get_current_user_id),
 ):
-    # Check if preferences already exist
-    result = await db.execute(
-        select(JobPreference)
-        .where(JobPreference.user_id == user_id)
-    )
+    assert_user_scope(current_user_id, user_id)
+
+    result = await db.execute(select(JobPreference).where(JobPreference.user_id == user_id))
     existing = result.scalar_one_or_none()
-    
+
     if existing:
-        # Update existing
         existing.target_roles = preferences.target_roles
         existing.locations = preferences.locations
         existing.experience_years = preferences.experience_years
@@ -41,39 +42,33 @@ async def save_preferences(
         existing.remote_ok = preferences.remote_ok
         existing.auto_apply_threshold = preferences.auto_apply_threshold
     else:
-        # Create new
-        new_pref = JobPreference(
-            user_id=user_id,
-            **preferences.model_dump()
-        )
+        new_pref = JobPreference(user_id=user_id, **preferences.model_dump())
         db.add(new_pref)
-    
-    await db.commit() # CRITICAL FIX: Commit the transaction!
-    
-    return {"status": "saved", "preferences": preferences}
+
+    await db.commit()
+
+    return {"status": "saved", "preferences": preferences.model_dump()}
+
 
 @router.get("/{user_id}")
 async def get_preferences(
-    user_id: str,
-    db: AsyncSession = Depends(get_db)
+    user_id: UUID,
+    db: AsyncSession = Depends(get_db),
+    current_user_id: UUID = Depends(get_current_user_id),
 ):
-    result = await db.execute(
-        select(JobPreference)
-        .where(JobPreference.user_id == user_id)
-    )
+    assert_user_scope(current_user_id, user_id)
+
+    result = await db.execute(select(JobPreference).where(JobPreference.user_id == user_id))
     prefs = result.scalar_one_or_none()
-    
+
     if not prefs:
-        raise HTTPException(
-            status_code=404,
-            detail="No preferences set yet"
-        )
-    
+        raise HTTPException(status_code=404, detail="No preferences set yet")
+
     return {
         "target_roles": prefs.target_roles,
         "locations": prefs.locations,
         "experience_years": prefs.experience_years,
         "salary_min": prefs.salary_min,
         "remote_ok": prefs.remote_ok,
-        "auto_apply_threshold": prefs.auto_apply_threshold
+        "auto_apply_threshold": prefs.auto_apply_threshold,
     }
