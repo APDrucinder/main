@@ -1,4 +1,5 @@
 import os
+import ssl
 from pathlib import Path
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import (
@@ -7,7 +8,6 @@ from sqlalchemy.ext.asyncio import (
     async_sessionmaker
 )
 from sqlalchemy.orm import DeclarativeBase
-import ssl
 
 env_path = Path(__file__).parent.parent / ".env"
 load_dotenv(dotenv_path=env_path)
@@ -26,7 +26,10 @@ engine = create_async_engine(
     echo=True,
     pool_size=5,
     max_overflow=10,
-    connect_args={"ssl": ssl_context}
+    connect_args={
+        "ssl": ssl_context,
+        "port": 443
+    }
 )
 
 AsyncSessionLocal = async_sessionmaker(
