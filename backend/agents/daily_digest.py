@@ -174,7 +174,7 @@ Separate the two versions with exactly this line:
 
         response = await self._call_llm(
             prompt=prompt,
-            max_tokens=2000,
+            max_tokens=8000,
             trace_name="daily_digest"
         )
 

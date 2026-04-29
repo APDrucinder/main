@@ -17,7 +17,7 @@ from shared.logger import logger
 
 class WorkExperience(BaseModel):
     company: str
-    role: str
+    role: Optional[str] = None  # Fixed: Now accepts null from the LLM
     duration: str
     description: Optional[str] = ""
 
@@ -132,7 +132,7 @@ JSON STRUCTURE:
     "portfolio_url": "string or null",
     "current_company": "string or null (most recent employer)",
     "skills": ["string"],
-    "experience": [{{ "company": "string", "role": "string", "duration": "string", "description": "string" }}],
+    "experience": [{{ "company": "string", "role": "string or null", "duration": "string", "description": "string" }}],
     "education": [{{ "institution": "string", "degree": "string", "field": "string", "year": "string", "cgpa": 0.0 }}],
     "projects": ["string"],
     "total_experience_years": 0.0
@@ -144,11 +144,12 @@ RESUME TEXT:
 
         response = await self._call_llm(
             prompt=prompt,
-            max_tokens=2000,
+            max_tokens=8000,
             trace_name="resume_parsing",
         )
 
         clean_response = self._clean_json_response(response)
+        print("FULL OUTPUT:", repr(clean_response))
 
         try:
             data = json.loads(clean_response)
