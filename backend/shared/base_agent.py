@@ -26,31 +26,17 @@ class BaseAgent:
         self.agent_name = agent_name
         self.provider = LLM_PROVIDER
 
-        if self.provider == "gemini":
-            from google import genai
-            # The client automatically picks up GEMINI_API_KEY from the environment
-            self.gemini_client = genai.Client(
-                api_key=os.getenv("GEMINI_API_KEY")
-            )
-            self.gemini_model_name = os.getenv("GEMINI_MODEL", "gemini-2.5-flash-lite")
-
-        elif self.provider == "anthropic":
+        if self.provider == "anthropic":
             import anthropic
             self.anthropic_client = anthropic.Anthropic(
                 api_key=os.getenv("ANTHROPIC_API_KEY")
             )
             self.anthropic_model = os.getenv(
-                "ANTHROPIC_MODEL", 
-                "claude-haiku-4-5-20251001"
+                "ANTHROPIC_MODEL", "claude-haiku-4-5-20251001"
             )
-
-        else:  # ollama
-            self.ollama_url = os.getenv(
-                "OLLAMA_URL", "http://localhost:11434"
-            )
-            self.ollama_model = os.getenv(
-                "OLLAMA_MODEL", "llama3.2"
-            )
+        elif self.provider == "ollama":
+            self.ollama_url = os.getenv("OLLAMA_URL", "http://localhost:11434")
+            self.ollama_model = os.getenv("OLLAMA_MODEL", "llama3.2")
 
     @retry(
         stop=stop_after_attempt(3),
@@ -64,29 +50,20 @@ class BaseAgent:
         max_tokens: int = 1000,
         trace_name: Optional[str] = None,
     ) -> str:
-
         start_time = time.monotonic()
         trace_label = trace_name or "unnamed"
 
         try:
-            if self.provider == "gemini":
-                result = await self._call_gemini(
-                    prompt, max_tokens
-                )
-
+            if self.provider == "deepseek":
+                result = await self._call_deepseek(prompt, max_tokens)
+            elif self.provider == "gemini":
+                result = await self._call_gemini(prompt, max_tokens)
             elif self.provider == "anthropic":
-                result = await self._call_anthropic(
-                    prompt, max_tokens
-                )
-
+                result = await self._call_anthropic(prompt, max_tokens)
             else:
-                result = await self._call_ollama(
-                    prompt, max_tokens
-                )
+                result = await self._call_ollama(prompt, max_tokens)
 
-            latency_ms = round(
-                (time.monotonic() - start_time) * 1000
-            )
+            latency_ms = round((time.monotonic() - start_time) * 1000)
             logger.info(
                 "LLM call completed",
                 agent=self.agent_name,
@@ -99,9 +76,7 @@ class BaseAgent:
             return result
 
         except Exception as exc:
-            latency_ms = round(
-                (time.monotonic() - start_time) * 1000
-            )
+            latency_ms = round((time.monotonic() - start_time) * 1000)
             logger.error(
                 "LLM call failed",
                 agent=self.agent_name,
@@ -109,19 +84,29 @@ class BaseAgent:
                 error=str(exc),
                 latency_ms=latency_ms,
             )
-            raise AgentException(
-                agent=self.agent_name, 
-                error=str(exc)
-            )
+            raise AgentException(agent=self.agent_name, error=str(exc))
 
-    async def _call_gemini(
-        self, prompt: str, max_tokens: int
-    ) -> str:
+    async def _call_deepseek(self, prompt: str, max_tokens: int) -> str:
+        import asyncio
+        from openai import OpenAI
+        client = OpenAI(
+            api_key=os.getenv("DEEPSEEK_API_KEY"),
+            base_url="https://api.deepseek.com",
+        )
+        response = await asyncio.to_thread(
+            client.chat.completions.create,
+            model=os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=max_tokens,
+            temperature=0.1
+        )
+        return response.choices[0].message.content
+
+    async def _call_gemini(self, prompt: str, max_tokens: int) -> str:
         from google import genai
-        
-        # Using the new SDK's native async generation method
-        response = await self.gemini_client.aio.models.generate_content(
-            model=self.gemini_model_name,
+        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+        response = await client.aio.models.generate_content(
+            model=os.getenv("GEMINI_MODEL", "gemini-2.0-flash"),
             contents=prompt,
             config=genai.types.GenerateContentConfig(
                 max_output_tokens=max_tokens,
@@ -130,9 +115,7 @@ class BaseAgent:
         )
         return response.text
 
-    async def _call_anthropic(
-        self, prompt: str, max_tokens: int
-    ) -> str:
+    async def _call_anthropic(self, prompt: str, max_tokens: int) -> str:
         import asyncio
         response = await asyncio.to_thread(
             self.anthropic_client.messages.create,
@@ -142,9 +125,7 @@ class BaseAgent:
         )
         return response.content[0].text
 
-    async def _call_ollama(
-        self, prompt: str, max_tokens: int
-    ) -> str:
+    async def _call_ollama(self, prompt: str, max_tokens: int) -> str:
         async with httpx.AsyncClient(timeout=120.0) as client:
             response = await client.post(
                 f"{self.ollama_url}/api/generate",
@@ -175,7 +156,5 @@ class BaseAgent:
                     agent=self.agent_name,
                     response_preview=response[:200],
                 )
-                raise ValueError(
-                    f"No JSON found in response: {response}"
-                )
+                raise ValueError(f"No JSON found in response: {response}")
             return json.loads(response[start:end])

@@ -4,7 +4,7 @@ import asyncio
 from typing import List, Optional
 
 from pydantic import BaseModel
-from playwright.sync_api import sync_playwright
+from playwright.async_api import async_playwright
 
 from agents.job_scraper import JobScraper
 from agents.job_scorer import JobScorer
@@ -33,7 +33,7 @@ class JobApplicationPipeline:
 
     def __init__(
         self,
-        apply_threshold: int = 75,
+        apply_threshold: int = 50,
         max_applications: int = 50,
         user_id: str = "default",
         dry_run: bool = False
@@ -251,70 +251,44 @@ class JobApplicationPipeline:
         apply_results = []
 
         try:
-            with sync_playwright() as pw:
-                browser = pw.chromium.launch(headless=True)
-                context = browser.new_context(
-                    viewport={"width": 1280, "height": 800}
-                )
-                page = context.new_page()
+            applier = AutoApplyBot(
+                headless=True,
+                dry_run=self.dry_run
+            )
 
-                applier = AutoApplier(
-                    page=page,
-                    user_data=user_data,
-                    dry_run=self.dry_run
+            for job, score in auto_apply_jobs:
+                logger.info(
+                    "Attempting apply",
+                    title=job.title,
+                    company=job.company,
+                    score=score.score
                 )
 
-                for job, score in auto_apply_jobs:
-                    logger.info(
-                        "Attempting apply",
-                        title=job.title,
-                        company=job.company,
-                        score=score.score,
-                        url=job.apply_url
+                try:
+                    result = await applier.apply(
+                        job_url=job.apply_url,
+                        user_data=user_data,
+                        resume_url=resume_path,
+                        credentials=None
                     )
+                    success = (result.status == "applied")
+                except Exception as exc:
+                    logger.error("Apply failed", title=job.title, error=str(exc))
+                    success = False
 
-                    try:
-                        success = applier.process_job(
-                            job_url=job.apply_url,
-                            user_id=self.user_id,
-                            job_id=str(job.apply_url)
-                        )
-                    except Exception as exc:
-                        logger.error(
-                            "Apply threw exception",
-                            title=job.title,
-                            error=str(exc)
-                        )
-                        success = False
-
-                    apply_results.append({
-                        "job_title": job.title,
-                        "company": job.company,
-                        "score": score.score,
-                        "apply_url": job.apply_url,
-                        "applied": success,
-                        "source": job.source,
-                    })
-
-                    if success:
-                        logger.info(
-                            "✅ Applied successfully",
-                            title=job.title,
-                            company=job.company
-                        )
-                    else:
-                        logger.warning(
-                            "❌ Apply failed — added to manual queue",
-                            title=job.title,
-                            company=job.company
-                        )
-
-                context.close()
-                browser.close()
+                apply_results.append({
+                    "job_title": job.title,
+                    "company": job.company,
+                    "score": score.score,
+                    "apply_url": job.apply_url,
+                    "applied": success,
+                    "source": job.source,
+                })
 
         except Exception as exc:
             logger.error("Playwright session failed", error=str(exc))
-            results["errors"].append(f"Auto apply session failed: {str(exc)}")
+            import traceback
+            traceback.print_exc()
 
         results["apply_results"] = apply_results
         results["applied_count"] = sum(

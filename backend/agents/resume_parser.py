@@ -144,7 +144,7 @@ RESUME TEXT:
 
         response = await self._call_llm(
             prompt=prompt,
-            max_tokens=8000,
+            max_tokens=2000,
             trace_name="resume_parsing",
         )
 
