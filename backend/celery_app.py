@@ -1,17 +1,21 @@
 import os
 import ssl
+from pathlib import Path
 
 from celery import Celery
 from celery.schedules import crontab
 from dotenv import load_dotenv
 
-load_dotenv()
+# .env lives in main/ (one level above backend/)
+env_path = Path(__file__).parent.parent / ".env"
+load_dotenv(dotenv_path=env_path)
 
 REDIS_URL = os.getenv("REDIS_URL") or os.getenv("UPSTASH_REDIS_URL")
 if not REDIS_URL:
     raise ValueError("REDIS_URL or UPSTASH_REDIS_URL is required for Celery")
 
-ssl_cert_reqs_env = os.getenv("REDIS_SSL_CERT_REQS", "required").lower()
+# Upstash uses managed TLS — CERT_NONE avoids self-signed cert errors
+ssl_cert_reqs_env = os.getenv("REDIS_SSL_CERT_REQS", "none").lower()
 ssl_cert_reqs = ssl.CERT_REQUIRED if ssl_cert_reqs_env == "required" else ssl.CERT_NONE
 
 use_tls = REDIS_URL.startswith("rediss://")

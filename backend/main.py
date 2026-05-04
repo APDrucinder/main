@@ -7,6 +7,24 @@ from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from api.pipeline_routes import router as pipeline_router
+from api.resume_routes import router as resume_router
+
+app.include_router(pipeline_router)
+app.include_router(resume_router)
+app = FastAPI()
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",           # local Next.js dev
+        "https://yourapp.vercel.app",      # production frontend
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 try:
     import sentry_sdk
 except ImportError:  # pragma: no cover
