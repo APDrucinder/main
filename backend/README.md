@@ -46,6 +46,7 @@ pytest -q
 - Set `DATABASE_URL` and Redis (`REDIS_URL` or `UPSTASH_REDIS_URL`) before deployment.
 - Keep `DB_SSL_VERIFY=true` and `REDIS_SSL_CERT_REQS=required` in production.
 - Use `AUTO_APPLY_DRY_RUN=true` for safe smoke runs before enabling live submission.
-- API endpoints require `X-User-Id` header and enforce user scope checks when `AUTH_REQUIRED=true`.
+- Session auth endpoints are available at `/auth/login`, `/auth/logout`, and `/auth/me`.
+- Browser clients should call APIs with credentials enabled to include the HttpOnly session cookie.
 - `/scan/trigger` accepts either JSON body `{ "user_id": "...", "locations": [...] }` or a `user_id` query parameter.
 - Integration E2E test runs only when `RUN_E2E_TESTS=true`.
