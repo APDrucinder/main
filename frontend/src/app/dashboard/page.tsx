@@ -1,7 +1,10 @@
 "use client";
 
+
+
 import {
   ArrowUpRight,
+  ChevronRight,
   Heart,
   X,
   Check,
@@ -9,16 +12,37 @@ import {
   Play,
   Loader2,
   Activity,
-  Briefcase,
-  ChevronRight,
+  Briefcase
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { useState, useEffect, useCallback } from "react";
-import { api } from "@/lib/api";
+import { useState, useEffect } from "react";
+import { ApiError } from "@/lib/api-client";
+import { getDashboard } from "@/lib/api";
+import type { DashboardJob, DashboardResponse } from "@/lib/api-types";
 
-// ── JobCard ───────────────────────────────────────────────────
-function JobCard({ job }: { job: any }) {
-  const isTopMatch = job.match >= 90;
+const fallbackJobs: DashboardJob[] = [
+  { title: "Web Designer", company: "Amazon", time: "6 h ago", salary: "$127k/yr", type: "Full-time", level: "Senior", location: "Los Angeles, CA", locationType: "Remote/Office", applicants: "More than 60", match: 79, initial: "a" },
+  { title: "Web Designer", company: "BeReal", time: "2 d ago", salary: "$115k/yr", type: "Full-time", level: "Middle", location: "Los Angeles, CA", locationType: "Remote", applicants: "Less than 40", match: 86, initial: "BR" },
+  { title: "UX/UI Designer", company: "Wise", time: "3 d ago", salary: "$120k/yr", type: "Full-time", level: "Senior", location: "Los Angeles, CA", locationType: "Remote/Office", applicants: "More than 30", match: 92, initial: "W", isTop: true },
+  { title: "Product Designer", company: "Spotify", time: "4 h ago", salary: "$140k/yr", type: "Full-time", level: "Senior", location: "New York, NY", locationType: "Remote", applicants: "Less than 20", match: 95, initial: "S", isTop: true },
+  { title: "Frontend Engineer", company: "Netflix", time: "1 d ago", salary: "$160k/yr", type: "Full-time", level: "Senior", location: "Los Gatos, CA", locationType: "Office", applicants: "More than 100", match: 88, initial: "N" },
+  { title: "UI Developer", company: "Figma", time: "5 h ago", salary: "$135k/yr", type: "Full-time", level: "Middle", location: "San Francisco, CA", locationType: "Remote", applicants: "Less than 50", match: 82, initial: "F" },
+  { title: "Visual Designer", company: "Apple", time: "1 w ago", salary: "$150k/yr", type: "Full-time", level: "Senior", location: "Cupertino, CA", locationType: "Office", applicants: "More than 200", match: 75, initial: "A" },
+  { title: "Interaction Designer", company: "Google", time: "2 d ago", salary: "$145k/yr", type: "Full-time", level: "Middle", location: "Mountain View, CA", locationType: "Hybrid", applicants: "More than 80", match: 81, initial: "G" },
+  { title: "Digital Designer", company: "Nike", time: "3 h ago", salary: "$110k/yr", type: "Contract", level: "Middle", location: "Portland, OR", locationType: "Remote", applicants: "Less than 20", match: 89, initial: "N" },
+  { title: "Lead Designer", company: "Airbnb", time: "4 d ago", salary: "$180k/yr", type: "Full-time", level: "Lead", location: "San Francisco, CA", locationType: "Remote", applicants: "More than 150", match: 96, initial: "A", isTop: true },
+];
+
+const scanSteps = [
+  "Parsing resume...",
+  "Scraping jobs...",
+  "Filtering...",
+  "Auto applying...",
+  "Done"
+];
+
+function JobCard({ job }: { job: DashboardJob }) {
+  const isTopMatch = job.match >= 90 || job.isTop;
   return (
     <div className="orion-card p-5 relative overflow-hidden group hover:border-[#C1F034]/30 transition-colors flex flex-col h-full">
       <div className="flex justify-between items-start mb-6">
@@ -31,29 +55,29 @@ function JobCard({ job }: { job: any }) {
             <p className="text-xs text-white/50">{job.company} • {job.time}</p>
           </div>
         </div>
-        {job.apply_url && (
-          <a href={job.apply_url} target="_blank" rel="noopener noreferrer"
-            className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center border border-white/10 hover:bg-white/10">
-            <ArrowUpRight className="w-3 h-3 text-white/60" />
-          </a>
-        )}
+        <div className="flex items-center gap-2">
+          <button className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center border border-white/10 hover:bg-white/10">
+            <Filter className="w-3 h-3 text-white/60" />
+          </button>
+          <button className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center border border-white/10 hover:bg-white/10">
+            <X className="w-3 h-3 text-white/60" />
+          </button>
+        </div>
       </div>
 
       <div className="flex flex-wrap gap-2 mb-8">
-        {job.salary && <span className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-medium text-white/80">{job.salary}</span>}
-        {job.status && <span className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-medium text-white/80">{job.status}</span>}
-        {job.location && <span className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-medium text-white/80">{job.location}</span>}
-        {job.source && <span className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-medium text-white/80">{job.source}</span>}
+        <span className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-medium text-white/80">{job.salary}</span>
+        <span className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-medium text-white/80">{job.type}</span>
+        <span className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-medium text-white/80">{job.level}</span>
+        <span className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-medium text-white/80">{job.location}</span>
+        <span className="px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[10px] font-medium text-white/80">{job.locationType}</span>
       </div>
 
       <div className="flex items-end justify-between mt-auto">
-        {job.matched_skills && job.matched_skills.length > 0 && (
-          <div className="flex flex-wrap gap-1 max-w-[60%]">
-            {job.matched_skills.slice(0, 3).map((s: string, i: number) => (
-              <span key={i} className="text-[9px] px-2 py-0.5 rounded-full bg-[#C1F034]/10 text-[#C1F034] border border-[#C1F034]/20">{s}</span>
-            ))}
-          </div>
-        )}
+        <div className="flex items-center gap-2 text-xs text-white/40 font-medium">
+          <Briefcase className="w-3.5 h-3.5" />
+          {job.applicants}
+        </div>
 
         <div className="relative w-20 h-20 flex items-center justify-center shrink-0">
           <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
@@ -62,7 +86,7 @@ function JobCard({ job }: { job: any }) {
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <span className="text-xl font-bold text-white leading-none">{job.match}%</span>
-            <span className="text-[8px] text-[#C1F034] uppercase font-bold mt-0.5">{isTopMatch ? "Top Match" : "Match"}</span>
+            <span className="text-[8px] text-[#C1F034] uppercase font-bold mt-0.5">{isTopMatch ? 'Top Match' : 'Strong Match'}</span>
           </div>
           {job.match >= 85 && (
             <div className="absolute -left-4 top-2 w-6 h-6 rounded-full bg-[#C1F034] flex items-center justify-center border-2 border-[#121214]">
@@ -77,133 +101,78 @@ function JobCard({ job }: { job: any }) {
     </div>
   );
 }
-
-// ── Main Page ─────────────────────────────────────────────────
 export default function DashboardPage() {
   const [isScanning, setIsScanning] = useState(false);
   const [scanStep, setScanStep] = useState(0);
-  const [jobs, setJobs] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [stats, setStats] = useState({
-    total_applied: 0,
-    applied_today: 0,
-    applied_this_week: 0,
-    interviews: 0,
-    rejections: 0,
-    response_rate: 0,
-  });
-
-  const scanSteps = [
-    "Parsing resume...",
-    "Scraping jobs...",
-    "Filtering...",
-    "Scoring matches...",
-    "Auto applying...",
-    "Done",
-  ];
-
-  // ── Load real data on mount ──
-  const loadApplications = useCallback(async () => {
-    try {
-      const data = await api.getApplications();
-      if (data && Array.isArray(data.applications) && data.applications.length > 0) {
-        const mapped = data.applications.map((app: any) => ({
-          title: app.job?.title || "Unknown Role",
-          company: app.job?.company || "Unknown",
-          time: app.applied_at ? new Date(app.applied_at).toLocaleDateString() : "—",
-          salary: app.job?.salary_range || null,
-          status: app.status,
-          location: app.job?.location || null,
-          source: app.job?.source || null,
-          apply_url: app.job?.apply_url || null,
-          match: app.match_score || 0,
-          matched_skills: app.matched_skills || [],
-          missing_skills: app.missing_skills || [],
-          initial: (app.job?.company || "?")[0].toUpperCase(),
-        }));
-        setJobs(mapped);
-      }
-    } catch {
-      // No data yet — show empty state
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  const loadStats = useCallback(async () => {
-    try {
-      const data = await api.getStats();
-      if (data) {
-        setStats({
-          total_applied: data.total_applied ?? 0,
-          applied_today: data.applied_today ?? 0,
-          applied_this_week: data.applied_this_week ?? 0,
-          interviews: data.interviews ?? 0,
-          rejections: data.rejections ?? 0,
-          response_rate: data.response_rate_percent ?? 0,
-        });
-      }
-    } catch {
-      // Keep defaults
-    }
-  }, []);
+  const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
+  const [loadingData, setLoadingData] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    loadApplications();
-    loadStats();
-  }, [loadApplications, loadStats]);
+    if (isScanning && scanStep < scanSteps.length - 1) {
+      const timer = setTimeout(() => {
+        setScanStep(prev => prev + 1);
+      }, 2000);
+      return () => clearTimeout(timer);
+    } else if (scanStep === scanSteps.length - 1) {
+      setTimeout(() => setIsScanning(false), 2000);
+    }
+  }, [isScanning, scanStep]);
 
-  // ── Start scan ──
-  const startScan = async () => {
+  const startScan = () => {
     setIsScanning(true);
     setScanStep(0);
-
-    try {
-      const { scan_id } = await api.runScan();
-
-      // Animate through steps while waiting
-      const stepInterval = setInterval(() => {
-        setScanStep(prev => (prev < scanSteps.length - 2 ? prev + 1 : prev));
-      }, 6000);
-
-      // Poll status
-      const pollInterval = setInterval(async () => {
-        try {
-          const status = await api.getScanStatus(scan_id);
-
-          if (status.status === "completed") {
-            clearInterval(pollInterval);
-            clearInterval(stepInterval);
-            setScanStep(scanSteps.length - 1);
-            setTimeout(() => {
-              setIsScanning(false);
-              loadApplications();
-              loadStats();
-            }, 2000);
-          }
-
-          if (status.status === "failed") {
-            clearInterval(pollInterval);
-            clearInterval(stepInterval);
-            setIsScanning(false);
-          }
-        } catch {
-          // ignore poll errors
-        }
-      }, 3000);
-
-    } catch {
-      setIsScanning(false);
-    }
   };
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadDashboard() {
+      try {
+        const data = await getDashboard();
+        if (mounted) {
+          setDashboardData(data);
+          setLoadError(null);
+        }
+      } catch (error) {
+        if (!mounted) return;
+        if (error instanceof ApiError) {
+          setLoadError(error.message);
+        } else {
+          setLoadError("Unable to load dashboard data.");
+        }
+      } finally {
+        if (mounted) {
+          setLoadingData(false);
+        }
+      }
+    }
+
+    void loadDashboard();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const jobs = dashboardData?.jobs ?? fallbackJobs;
 
   return (
     <div className="w-full max-w-[1600px] mx-auto animate-in fade-in duration-700 font-sans mt-2 pb-20 text-white">
+      {loadingData ? (
+        <p className="mb-4 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-xs text-white/60">
+          Loading dashboard...
+        </p>
+      ) : null}
+      {loadError ? (
+        <p className="mb-4 rounded-lg border border-red-400/20 bg-red-500/10 px-4 py-2 text-xs text-red-200">
+          {loadError}
+        </p>
+      ) : null}
 
       {/* ═══ HERO SECTION ═══ */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 relative min-h-[480px]">
 
-        {/* Left: Title + Stats */}
+        {/* Left Area: Title and Salary Chart */}
         <div className="lg:col-span-5 flex flex-col justify-between pt-8 z-10 relative">
           <div>
             <h1 className="text-5xl lg:text-6xl font-light tracking-tight leading-tight mb-2 uppercase">
@@ -217,30 +186,46 @@ export default function DashboardPage() {
 
           <div className="orion-card p-6 w-[85%] mt-auto">
             <div className="flex justify-between items-start mb-6">
-              <h3 className="text-sm font-medium text-white/80">Pipeline Summary</h3>
+              <h3 className="text-sm font-medium text-white/80">Salary expectations</h3>
+              <button className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition-colors">
+                <ArrowUpRight className="w-3 h-3 text-white/60" />
+              </button>
             </div>
-            <div className="grid grid-cols-3 gap-4">
-              <div>
-                <div className="text-2xl font-bold stat-number">{stats.total_applied}</div>
-                <div className="text-[10px] text-white/50 uppercase mt-1">Total Applied</div>
+
+            <div className="relative h-32 w-full">
+              <svg viewBox="0 0 300 100" className="w-full h-full overflow-visible" preserveAspectRatio="none">
+                <defs>
+                  <pattern id="diagonalHatchDark" width="6" height="6" patternTransform="rotate(45 0 0)" patternUnits="userSpaceOnUse">
+                    <line x1="0" y1="0" x2="0" y2="6" stroke="rgba(255,255,255,0.15)" strokeWidth="1" />
+                  </pattern>
+                </defs>
+                <line x1="0" y1="20" x2="300" y2="20" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+                <line x1="0" y1="60" x2="300" y2="60" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
+
+                <polygon points="0,80 50,65 100,75 150,50 200,65 250,30 300,45 300,80 0,80" fill="url(#diagonalHatchDark)" />
+                <polyline points="0,80 50,65 100,75 150,50 200,65 250,30 300,45" fill="none" stroke="#C1F034" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+
+                <circle cx="150" cy="50" r="4" fill="#C1F034" />
+                <g transform="translate(150, 50)">
+                  <rect x="-18" y="-20" width="36" height="14" rx="7" fill="#C1F034" />
+                  <text x="0" y="-10.5" fontSize="8" fontWeight="bold" fill="black" textAnchor="middle">48%</text>
+                </g>
+                <circle cx="250" cy="30" r="3" fill="white" />
+              </svg>
+              <div className="absolute -bottom-2 left-0 right-0 flex justify-between text-[9px] font-semibold text-white/40 uppercase">
+                <span>Mar</span><span>Apr</span><span>May</span><span>Jun</span><span>Jul</span><span>Aug</span>
               </div>
-              <div>
-                <div className="text-2xl font-bold stat-number">{stats.applied_this_week}</div>
-                <div className="text-[10px] text-white/50 uppercase mt-1">This Week</div>
-              </div>
-              <div>
-                <div className="text-2xl font-bold stat-number text-[#C1F034]">{stats.interviews}</div>
-                <div className="text-[10px] text-white/50 uppercase mt-1">Interviews</div>
-              </div>
+              <div className="absolute top-4 -left-8 text-[8px] text-white/40">Senior</div>
+              <div className="absolute top-[52px] -left-8 text-[8px] text-white/40">Middle</div>
             </div>
           </div>
         </div>
 
-        {/* Center/Right */}
+        {/* Center/Right Area */}
         <div className="lg:col-span-7 relative flex justify-center items-center">
+
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[#C1F034]/10 blur-[100px] rounded-full pointer-events-none" />
 
-          {/* Scan card */}
           <div className="relative z-10 w-full max-w-md orion-card p-8 border border-[#C1F034]/20 glow-neon">
             <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
               <Activity className="w-5 h-5 text-[#C1F034]" />
@@ -250,7 +235,6 @@ export default function DashboardPage() {
             <AnimatePresence mode="wait">
               {!isScanning ? (
                 <motion.div
-                  key="idle"
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   className="flex flex-col items-center justify-center py-8"
                 >
@@ -265,7 +249,6 @@ export default function DashboardPage() {
                 </motion.div>
               ) : (
                 <motion.div
-                  key="scanning"
                   initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
                   className="py-4"
                 >
@@ -275,22 +258,17 @@ export default function DashboardPage() {
                       const isPast = idx < scanStep;
                       return (
                         <div key={step} className="flex items-center gap-4">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors ${isPast ? "bg-[#C1F034] border-[#C1F034] text-black" :
-                              isActive ? "bg-white/10 border-[#C1F034] text-[#C1F034]" :
-                                "bg-transparent border-white/20 text-white/30"
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors ${isPast ? 'bg-[#C1F034] border-[#C1F034] text-black' :
+                            isActive ? 'bg-white/10 border-[#C1F034] text-[#C1F034]' : 'bg-transparent border-white/20 text-white/30'
                             }`}>
-                            {isPast ? <Check className="w-4 h-4" /> :
-                              isActive ? <Loader2 className="w-4 h-4 animate-spin" /> :
-                                <div className="w-1.5 h-1.5 rounded-full bg-current" />}
+                            {isPast ? <Check className="w-4 h-4" /> : isActive ? <Loader2 className="w-4 h-4 animate-spin" /> : <div className="w-1.5 h-1.5 rounded-full bg-current" />}
                           </div>
-                          <span className={`text-sm font-medium transition-colors ${isPast ? "text-white" :
-                              isActive ? "text-[#C1F034]" :
-                                "text-white/30"
+                          <span className={`text-sm font-medium transition-colors ${isPast ? 'text-white' : isActive ? 'text-[#C1F034]' : 'text-white/30'
                             }`}>
                             {step}
                           </span>
                         </div>
-                      );
+                      )
                     })}
                   </div>
                 </motion.div>
@@ -298,126 +276,170 @@ export default function DashboardPage() {
             </AnimatePresence>
           </div>
 
-          {/* Right metrics column */}
           <div className="absolute right-0 top-0 bottom-0 flex flex-col justify-between py-6 w-[320px] pointer-events-none z-20">
 
-            {/* Daily Metrics */}
             <div className="orion-card p-5 pointer-events-auto">
               <div className="flex justify-between items-center mb-4">
                 <h3 className="text-sm font-medium">Daily Metrics</h3>
+                <button className="w-6 h-6 rounded-full bg-white/10 flex items-center justify-center">
+                  <ArrowUpRight className="w-3 h-3 text-white/60" />
+                </button>
               </div>
               <div className="flex items-end gap-6 mb-4">
                 <div>
-                  <div className="text-2xl font-bold stat-number">{stats.applied_today}</div>
-                  <div className="text-[10px] text-white/50 uppercase mt-1">Today</div>
+                  <div className="text-2xl font-bold stat-number">{dashboardData?.matched ?? 142}<span className="text-[10px] text-[#C1F034] ml-1 align-top">+{dashboardData?.matchedDelta ?? 12}%</span></div>
+                  <div className="text-[10px] text-white/50 uppercase mt-1">Matched</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold stat-number">{stats.applied_this_week}</div>
-                  <div className="text-[10px] text-white/50 uppercase mt-1">This Week</div>
+                  <div className="text-2xl font-bold stat-number">{dashboardData?.applied ?? 45}<span className="text-[10px] text-[#C1F034] ml-1 align-top">+{dashboardData?.appliedDelta ?? 5}%</span></div>
+                  <div className="text-[10px] text-white/50 uppercase mt-1">Applied</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold stat-number">{stats.interviews}</div>
+                  <div className="text-2xl font-bold stat-number">{dashboardData?.interviews ?? 8}<span className="text-[10px] text-white/50 ml-1 align-top"></span></div>
                   <div className="text-[10px] text-white/50 uppercase mt-1">Interviews</div>
                 </div>
+              </div>
+              <div className="flex bg-white/5 rounded-full p-1 border border-white/10 mt-2">
+                <div className="flex-1 bg-black rounded-full py-1 text-center text-[10px] font-bold text-white">Jobs</div>
+                <div className="flex-1 rounded-full py-1 text-center text-[10px] font-medium text-white/60">Apps</div>
+                <div className="flex-1 bg-[#C1F034] rounded-full py-1 text-center text-[10px] font-bold text-black">Intvs</div>
               </div>
             </div>
 
             <div className="flex gap-4">
               <div className="orion-card p-5 flex-1 pointer-events-auto">
                 <div className="flex justify-between items-start mb-2">
-                  <h3 className="text-xs font-medium text-white/80">Response Rate</h3>
+                  <h3 className="text-xs font-medium text-white/80">Success Rate</h3>
+                  <ArrowUpRight className="w-3 h-3 text-white/40" />
                 </div>
                 <div className="text-2xl font-bold mb-4">
-                  {stats.response_rate}<span className="text-xs text-[#C1F034] ml-0.5 align-top">%</span>
+                  {dashboardData?.matched && dashboardData?.applied
+                    ? ((dashboardData.applied / dashboardData.matched) * 100).toFixed(1)
+                    : "18.4"}
+                  <span className="text-xs text-[#C1F034] ml-0.5 align-top">%</span>
                 </div>
                 <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden flex">
-                  <div className="h-full bg-[#C1F034] rounded-full" style={{ width: `${Math.min(stats.response_rate, 100)}%` }} />
+                  <div className="h-full bg-white w-1/3"></div>
+                  <div className="h-full bg-white/30 w-1/4 ml-1"></div>
                 </div>
                 <div className="flex justify-between mt-2 text-[8px] text-white/40 uppercase">
-                  <span>Interviews: {stats.interviews}</span>
-                  <span>Rejections: {stats.rejections}</span>
+                  <span>Interviews</span>
+                  <span>Offers</span>
                 </div>
               </div>
 
               <div className="orion-card p-5 flex-[1.2] pointer-events-auto">
                 <div className="flex justify-between items-start mb-2">
-                  <h3 className="text-xs font-medium text-white/80">Total Applied</h3>
+                  <h3 className="text-xs font-medium text-white/80">Active Feeds</h3>
+                  <ArrowUpRight className="w-3 h-3 text-white/40" />
                 </div>
                 <div className="text-2xl font-bold mb-4">
-                  {stats.total_applied}
+                  {(dashboardData?.activeFeeds ?? 2415).toLocaleString()}<span className="text-xs text-[#C1F034] ml-0.5 align-top">+{dashboardData?.activeFeedsDelta ?? 14}</span>
                 </div>
-                <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden">
-                  <div className="h-full bg-[#C1F034] rounded-full" style={{ width: `${Math.min((stats.total_applied / 100) * 100, 100)}%` }} />
+                <div className="flex items-end gap-1 h-6">
+                  {[40, 70, 45, 90, 60, 30, 80, 100, 50].map((val, i) => (
+                    <div key={i} className={`flex-1 rounded-sm ${i === 7 ? 'bg-[#C1F034]' : 'bg-white/20'}`} style={{ height: `${val}%` }} />
+                  ))}
                 </div>
               </div>
             </div>
+
           </div>
+
         </div>
       </div>
 
-      {/* ═══ BOTTOM SECTION ═══ */}
+      {/* ═══ BOTTOM SECTION (SCROLLABLE FEED) ═══ */}
       <div className="mt-16 flex flex-col lg:flex-row items-start gap-8">
 
-        {/* Filters sidebar */}
+        {/* Left Sidebar: Filters */}
         <div className="w-full lg:w-[280px] lg:sticky lg:top-8 shrink-0">
           <div className="flex items-center gap-2 mb-6">
             <Filter className="w-5 h-5 text-[#C1F034]" />
-            <h2 className="text-xl font-semibold">Matched Jobs</h2>
+            <h2 className="text-xl font-semibold">Filters</h2>
           </div>
-          <div className="orion-card p-5 space-y-4">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-white/60">Total matched</span>
-              <span className="font-bold text-[#C1F034]">{jobs.length}</span>
+
+          <div className="orion-card p-5 space-y-6">
+            <div>
+              <h3 className="text-sm font-medium text-white/80 mb-3">Match Score</h3>
+              <div className="space-y-2">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div className="w-4 h-4 rounded border border-white/20 group-hover:border-[#C1F034] flex items-center justify-center bg-[#C1F034] text-black transition-colors">
+                    <Check className="w-3 h-3" />
+                  </div>
+                  <span className="text-sm text-white/70 group-hover:text-white transition-colors">&gt; 80% (Strong Match)</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div className="w-4 h-4 rounded border border-white/20 group-hover:border-white/50 flex items-center justify-center transition-colors">
+                  </div>
+                  <span className="text-sm text-white/70 group-hover:text-white transition-colors">60% - 80% (Good Match)</span>
+                </label>
+              </div>
             </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-white/60">Applied</span>
-              <span className="font-bold">{stats.total_applied}</span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-white/60">Interviews</span>
-              <span className="font-bold text-[#C1F034]">{stats.interviews}</span>
-            </div>
+
             <div className="h-px w-full bg-white/10" />
-            <p className="text-xs text-white/40 text-center">
-              Run a scan to find new job matches
-            </p>
+
+            <div>
+              <h3 className="text-sm font-medium text-white/80 mb-3">Job Type</h3>
+              <div className="flex flex-wrap gap-2">
+                <button className="glass-pill-active px-3 py-1.5 text-xs font-medium cursor-pointer">Remote</button>
+                <button className="glass-pill px-3 py-1.5 text-xs font-medium cursor-pointer hover:bg-white/10 transition-colors">Hybrid</button>
+                <button className="glass-pill px-3 py-1.5 text-xs font-medium cursor-pointer hover:bg-white/10 transition-colors">On-site</button>
+              </div>
+            </div>
+
+            <div className="h-px w-full bg-white/10" />
+
+            <div>
+              <h3 className="text-sm font-medium text-white/80 mb-3">Seniority Level</h3>
+              <div className="space-y-2">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div className="w-4 h-4 rounded border border-white/20 group-hover:border-white/50 flex items-center justify-center transition-colors"></div>
+                  <span className="text-sm text-white/70 group-hover:text-white transition-colors">Junior</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div className="w-4 h-4 rounded border border-white/20 group-hover:border-[#C1F034] flex items-center justify-center bg-[#C1F034] text-black transition-colors"><Check className="w-3 h-3" /></div>
+                  <span className="text-sm text-white/70 group-hover:text-white transition-colors">Middle</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div className="w-4 h-4 rounded border border-white/20 group-hover:border-[#C1F034] flex items-center justify-center bg-[#C1F034] text-black transition-colors"><Check className="w-3 h-3" /></div>
+                  <span className="text-sm text-white/70 group-hover:text-white transition-colors">Senior</span>
+                </label>
+              </div>
+            </div>
+
+            <div className="h-px w-full bg-white/10" />
+
+            <div>
+              <h3 className="text-sm font-medium text-white/80 mb-3">Salary Range</h3>
+              <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden mt-4">
+                <div className="w-1/2 h-full bg-[#C1F034] ml-1/4"></div>
+              </div>
+              <div className="flex justify-between mt-2 text-xs text-white/50">
+                <span>$80k</span>
+                <span>$150k</span>
+              </div>
+            </div>
+
           </div>
         </div>
 
-        {/* Job feed */}
+        {/* Right Scrollable Feed: Jobs */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-semibold">
-              Applications{" "}
-              <span className="text-sm text-white/40 ml-2 font-normal">{jobs.length} results</span>
-            </h2>
+            <h2 className="text-xl font-semibold">Matched Jobs <span className="text-sm text-white/40 ml-2 font-normal">{jobs.length} results</span></h2>
             <button className="flex items-center gap-2 text-sm text-white/60 hover:text-white transition-colors bg-white/5 border border-white/10 px-4 py-2 rounded-full backdrop-blur-md cursor-pointer hover:bg-white/10">
               Sort by: Highest Match <ChevronRight className="w-4 h-4 rotate-90" />
             </button>
           </div>
 
-          {loading ? (
-            <div className="flex items-center justify-center h-40">
-              <Loader2 className="w-8 h-8 animate-spin text-[#C1F034]" />
-            </div>
-          ) : jobs.length === 0 ? (
-            <div className="orion-card p-16 flex flex-col items-center justify-center text-center">
-              <Briefcase className="w-12 h-12 text-white/20 mb-4" />
-              <h3 className="text-lg font-semibold text-white/60 mb-2">No applications yet</h3>
-              <p className="text-sm text-white/40 max-w-md">
-                Upload your resume on the Onboarding page, then hit the scan button to start matching and applying to jobs.
-              </p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 max-h-[800px] overflow-y-auto custom-scroll pr-2 pb-20">
-              {jobs
-                .sort((a, b) => b.match - a.match)
-                .map((job, idx) => (
-                  <JobCard key={idx} job={job} />
-                ))}
-            </div>
-          )}
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 h-[800px] overflow-y-auto custom-scroll pr-2 pb-20">
+            {jobs.map((job, idx) => (
+              <JobCard key={idx} job={job} />
+            ))}
+          </div>
         </div>
+
       </div>
     </div>
   );

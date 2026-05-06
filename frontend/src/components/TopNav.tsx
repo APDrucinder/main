@@ -5,11 +5,13 @@ import {
   LayoutDashboard,
   Rocket,
   Briefcase,
-  Settings
+  Settings,
+  LogOut
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
+import { logout } from "@/app/actions/auth";
 
 const navItems = [
   { icon: LayoutDashboard, href: "/dashboard", label: "Dashboard" },
@@ -20,6 +22,10 @@ const navItems = [
 
 export function TopNav() {
   const pathname = usePathname();
+
+  if (pathname === "/login") {
+    return null;
+  }
 
   return (
     <header className="h-24 flex items-center justify-between z-40 bg-transparent py-4 relative">
@@ -73,13 +79,15 @@ export function TopNav() {
           <span className="absolute top-2.5 right-2.5 w-1.5 h-1.5 bg-primary rounded-full shadow-sm"></span>
         </button>
 
-        <button className="w-10 h-10 rounded-full overflow-hidden border border-white/20 shadow-sm transition-all duration-300">
-          <img
-            src="https://i.pravatar.cc/150?u=a042581f4e29026704d"
-            alt="Profile"
-            className="w-full h-full object-cover grayscale hover:grayscale-0"
-          />
-        </button>
+        <form action={logout}>
+          <button
+            type="submit"
+            className="w-10 h-10 rounded-full bg-[#27272A]/40 backdrop-blur-md flex items-center justify-center text-muted-foreground hover:text-foreground transition-all duration-200 border border-white/10 shadow-sm"
+            title="Sign out"
+          >
+            <LogOut className="w-4 h-4" strokeWidth={2} />
+          </button>
+        </form>
       </div>
     </header>
   );
