@@ -93,3 +93,69 @@ export const api = {
             body: JSON.stringify({ feedback }),
         }),
 }
+
+export interface User {
+    id: string;
+    email: string;
+    subscription_tier: string;
+}
+
+export interface ApiError {
+    code: string;
+    message: string;
+}
+
+export interface Application {
+    application_id: string;
+    status: string;
+    match_score: number | null;
+    matched_skills: string[];
+    missing_skills: string[];
+    reasoning: string | null;
+    manual_apply_url: string | null;
+    applied_at: string | null;
+    job: {
+        id: string;
+        title: string;
+        company: string;
+        location: string;
+        salary_range: string | null;
+        apply_url: string;
+        source: string | null;
+    };
+}
+
+export interface DashboardResponse {
+    stats: {
+        total_applied: number;
+        applied_today: number;
+        applied_this_week: number;
+        interviews: number;
+    };
+    recent_applications: Array<{
+        application_id: string;
+        status: string;
+        match_score: number | null;
+        applied_at: string | null;
+        job: {
+            id: string;
+            title: string;
+            company: string;
+            location: string;
+            apply_url: string;
+        };
+    }>;
+}
+
+export interface SettingsPayload {
+    target_roles: string[];
+    locations: string[];
+    experience_years: number;
+    salary_min: number;
+    remote_ok: boolean;
+    auto_apply_threshold: number;
+}
+
+export interface OnboardingPayload extends SettingsPayload {
+    full_name: string;
+}

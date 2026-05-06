@@ -32,3 +32,14 @@ export default function RootLayout({
     </html>
   );
 }
+import { redirect } from "next/navigation";
+import { apiRequest } from "@/lib/api-client";
+
+export async function requireSession() {
+  try {
+    const me = await apiRequest<{ user: { id: string } }>("/auth/me");
+    return me.user;
+  } catch {
+    redirect("/login");
+  }
+}
