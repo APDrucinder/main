@@ -1,9 +1,6 @@
 import os
-from typing import Optional
-
+from typing import Optional, Any
 from dotenv import load_dotenv
-from typing import Any
-
 from shared.logger import logger
 
 load_dotenv()
@@ -20,10 +17,11 @@ def _get_supabase_client():
     supabase_service_key = os.getenv("SUPABASE_SERVICE_KEY")
 
     if not supabase_url or not supabase_service_key:
-        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY must be configured")
+        raise RuntimeError(
+            "SUPABASE_URL and SUPABASE_SERVICE_KEY must be configured"
+        )
 
     from supabase import create_client
-
     _supabase_client = create_client(supabase_url, supabase_service_key)
     return _supabase_client
 
@@ -43,31 +41,40 @@ def upload_resume(
         {"content-type": content_type},
     )
 
-    return client.storage.from_("resumes").get_public_url(file_path)
+    # Use signed URL instead of public URL
+    # Works even with private bucket
+    result = client.storage.from_("resumes").create_signed_url(
+        file_path,
+        expires_in=604800  # 7 days
+    )
+    
+    signed_url = result.get("signedURL") or result.get("signedUrl")
+    
+    if not signed_url:
+        logger.warning(
+            "Could not get signed URL, falling back to public URL",
+            file_path=file_path
+        )
+        return client.storage.from_("resumes").get_public_url(file_path)
+    
+    logger.info("Resume uploaded", file_path=file_path)
+    return signed_url
 
 
 def save_to_manual_queue(user_id: str, job_id: str):
-    """
-    Inserts a record into the applications table with a manual_queue status.
-    Uses the Supabase client directly.
-    """
     client = _get_supabase_client()
-
     try:
         response = (
             client.table("applications")
-            .insert(
-                {
-                    "user_id": user_id,
-                    "job_id": job_id,
-                    "status": "manual_queue",
-                    "reasoning": "No ATS handler matched for URL",
-                }
-            )
+            .insert({
+                "user_id": user_id,
+                "job_id": job_id,
+                "status": "manual_queue",
+                "reasoning": "No ATS handler matched for URL",
+            })
             .execute()
         )
         return response
-
     except Exception as e:
         logger.error(
             "Failed to save to manual queue",

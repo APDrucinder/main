@@ -34,6 +34,7 @@ from api.application_routes import router as application_router
 from api.preferences_routes import router as preferences_router
 from api.resume_routes import router as resume_router
 from api.scan_routes import router as scan_router
+from api.scan_direct_routes import router as scan_direct_router
 
 load_dotenv()
 
@@ -79,6 +80,7 @@ app.add_middleware(
 app.include_router(resume_router)
 app.include_router(preferences_router)
 app.include_router(scan_router)
+app.include_router(scan_direct_router)
 app.include_router(application_router)
 
 

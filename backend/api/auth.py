@@ -1,9 +1,13 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from uuid import UUID
 
+from dotenv import load_dotenv
 from fastapi import Header, HTTPException, status
+
+load_dotenv(dotenv_path=Path(__file__).parent.parent / ".env")
 
 AUTH_REQUIRED = os.getenv("AUTH_REQUIRED", "true").lower() == "true"
 DEV_USER_ID = os.getenv("DEV_USER_ID")
