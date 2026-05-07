@@ -28,13 +28,22 @@ if not ssl_verify:
     ssl_context.verify_mode = ssl.CERT_NONE
 connect_timeout = float(os.getenv("DB_CONNECT_TIMEOUT_SECONDS", "4"))
 
+connect_args: dict[str, object]
+if DATABASE_URL.startswith("postgresql+"):
+    connect_args = {"ssl": ssl_context, "timeout": connect_timeout}
+elif DATABASE_URL.startswith("sqlite+"):
+    # sqlite drivers (for local/dev) do not accept ssl arguments.
+    connect_args = {"timeout": connect_timeout}
+else:
+    connect_args = {"timeout": connect_timeout}
+
 engine = create_async_engine(
     DATABASE_URL,
     echo=os.getenv("SQL_ECHO", "false").lower() == "true",
     pool_size=int(os.getenv("DB_POOL_SIZE", "5")),
     max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "10")),
     pool_pre_ping=True,
-    connect_args={"ssl": ssl_context, "timeout": connect_timeout},
+    connect_args=connect_args,
 )
 
 AsyncSessionLocal = async_sessionmaker(
