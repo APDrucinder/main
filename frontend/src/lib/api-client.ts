@@ -24,12 +24,27 @@ type ApiRequestInit = RequestInit & {
   rawResponse?: boolean;
 };
 
+declare global {
+  interface Window {
+    Clerk?: {
+      session?: {
+        getToken: () => Promise<string | null>;
+      } | null;
+    };
+  }
+}
+
 function getBaseUrl() {
-  const base = process.env.NEXT_PUBLIC_API_BASE_URL;
+  const base = process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_URL;
   if (!base) {
-    throw new Error("NEXT_PUBLIC_API_BASE_URL is not configured.");
+    throw new Error("NEXT_PUBLIC_API_BASE_URL or NEXT_PUBLIC_API_URL is not configured.");
   }
   return base;
+}
+
+async function getClerkToken() {
+  if (typeof window === "undefined") return null;
+  return window.Clerk?.session?.getToken() ?? null;
 }
 
 export async function apiRequest<T>(
@@ -47,6 +62,13 @@ export async function apiRequest<T>(
 
   if (!headers.has("Accept")) {
     headers.set("Accept", "application/json");
+  }
+
+  if (!headers.has("Authorization")) {
+    const token = await getClerkToken();
+    if (token) {
+      headers.set("Authorization", `Bearer ${token}`);
+    }
   }
 
   let response: Response;

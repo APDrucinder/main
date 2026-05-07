@@ -6,8 +6,8 @@ from celery import Celery
 from celery.schedules import crontab
 from dotenv import load_dotenv
 
-# .env lives in main/ (one level above backend/)
-env_path = Path(__file__).parent.parent / ".env"
+# .env lives in backend/
+env_path = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=env_path)
 
 REDIS_URL = os.getenv("REDIS_URL") or os.getenv("UPSTASH_REDIS_URL")

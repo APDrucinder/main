@@ -7,13 +7,16 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError, TimeoutError as SQLAlchemyTimeoutError
 
 from api.application_routes import router as application_router
 from api.pipeline_routes import router as pipeline_router
 from api.preferences_routes import router as preferences_router
 from api.resume_routes import router as resume_router
 from api.scan_routes import router as scan_router
+from api.scan_direct_routes import router as scan_direct_router
 from api.web_routes import router as web_router
+from api.clerk_webhook import router as webhook_router
 
 try:
     import sentry_sdk
@@ -80,6 +83,45 @@ async def http_exception_handler(_: Request, exc: HTTPException):
     )
 
 
+@app.exception_handler(SQLAlchemyTimeoutError)
+async def database_timeout_handler(_: Request, __: SQLAlchemyTimeoutError):
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": {
+                "code": "DATABASE_UNAVAILABLE",
+                "message": "Database is unavailable. Check DATABASE_URL or network access.",
+            }
+        },
+    )
+
+
+@app.exception_handler(TimeoutError)
+async def database_connection_timeout_handler(_: Request, __: TimeoutError):
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": {
+                "code": "DATABASE_UNAVAILABLE",
+                "message": "Database is unavailable. Check DATABASE_URL or network access.",
+            }
+        },
+    )
+
+
+@app.exception_handler(SQLAlchemyError)
+async def database_exception_handler(_: Request, __: SQLAlchemyError):
+    return JSONResponse(
+        status_code=503,
+        content={
+            "error": {
+                "code": "DATABASE_ERROR",
+                "message": "Database request failed.",
+            }
+        },
+    )
+
+
 @app.exception_handler(Exception)
 async def unhandled_exception_handler(_: Request, __: Exception):
     return JSONResponse(
@@ -100,6 +142,7 @@ app.include_router(scan_router)
 app.include_router(scan_direct_router)
 app.include_router(application_router)
 app.include_router(pipeline_router)
+app.include_router(webhook_router)
 
 
 @app.get("/health")

@@ -61,6 +61,18 @@ export async function login(_: LoginState, formData: FormData): Promise<LoginSta
 
   try {
     const response = await loginRequest(email, password);
+    
+    if (!response.ok) {
+      let errorMessage = "Invalid email or password.";
+      try {
+        const data = await response.json();
+        if (data?.error?.message) {
+          errorMessage = data.error.message;
+        }
+      } catch {}
+      return { error: errorMessage };
+    }
+
     const setCookieHeader = response.headers.get("set-cookie");
 
     if (setCookieHeader) {

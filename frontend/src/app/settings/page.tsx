@@ -7,7 +7,6 @@ import {
   Bell,
   Shield,
   Briefcase,
-  Zap,
   AlertCircle
 } from "lucide-react";
 import { useState } from "react";
@@ -16,10 +15,10 @@ import { updateSettings } from "@/lib/api";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("agent");
-  const [targetRoles, setTargetRoles] = useState("Web Designer, UX/UI Designer");
-  const [locations, setLocations] = useState("Los Angeles, CA, Remote");
-  const [experienceRange, setExperienceRange] = useState("3-5");
-  const [minSalary, setMinSalary] = useState("$110,000");
+  const [targetRoles, setTargetRoles] = useState("");
+  const [locations, setLocations] = useState("");
+  const [experienceRange, setExperienceRange] = useState("0-1");
+  const [minSalary, setMinSalary] = useState("");
   const [autoApplyThreshold, setAutoApplyThreshold] = useState(80);
   const [remoteFlexibility, setRemoteFlexibility] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -96,23 +95,26 @@ export default function SettingsPage() {
                   <div className="grid grid-cols-2 gap-6">
                     <div>
                       <label className="text-xs font-medium text-white/60 uppercase mb-2 block">Target Roles</label>
-                      <input type="text" value={targetRoles} onChange={(e) => setTargetRoles(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-[#C1F034]/50" />
+                      <input type="text" value={targetRoles} onChange={(e) => setTargetRoles(e.target.value)} placeholder="Frontend Engineer, Product Designer" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#C1F034]/50" />
                     </div>
                     <div>
                       <label className="text-xs font-medium text-white/60 uppercase mb-2 block">Locations</label>
-                      <input type="text" value={locations} onChange={(e) => setLocations(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-[#C1F034]/50" />
+                      <input type="text" value={locations} onChange={(e) => setLocations(e.target.value)} placeholder="Remote, New York, Bengaluru" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#C1F034]/50" />
                     </div>
                   </div>
                   <div className="grid grid-cols-2 gap-6">
                     <div>
                       <label className="text-xs font-medium text-white/60 uppercase mb-2 block">Years of Experience</label>
                       <select value={experienceRange} onChange={(e) => setExperienceRange(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-[#C1F034]/50 appearance-none">
+                        <option value="0-1">0 - 1 Years</option>
+                        <option value="1-3">1 - 3 Years</option>
                         <option value="3-5">3 - 5 Years</option>
+                        <option value="5+">5+ Years</option>
                       </select>
                     </div>
                     <div>
                       <label className="text-xs font-medium text-white/60 uppercase mb-2 block">Min Salary</label>
-                      <input type="text" value={minSalary} onChange={(e) => setMinSalary(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:border-[#C1F034]/50" />
+                      <input type="text" value={minSalary} onChange={(e) => setMinSalary(e.target.value)} placeholder="100000" className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder:text-white/25 focus:border-[#C1F034]/50" />
                     </div>
                   </div>
                 </div>
@@ -160,50 +162,15 @@ export default function SettingsPage() {
           {activeTab === "billing" && (
             <div className="animate-in fade-in slide-in-from-right-4 duration-500">
 
-              <div className="orion-card p-6 relative overflow-hidden mb-6 border-[#C1F034]/30">
-                <div className="absolute top-0 right-0 w-64 h-64 bg-[#C1F034]/10 blur-3xl rounded-full translate-x-1/2 -translate-y-1/2" />
-                <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+              <div className="orion-card p-6 relative overflow-hidden mb-6 border-white/10">
+                <div className="flex items-start gap-4">
+                  <AlertCircle className="mt-1 h-5 w-5 text-white/45" />
                   <div>
-                    <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[#C1F034]/20 border border-[#C1F034]/30 text-[#C1F034] text-xs font-bold mb-4 uppercase tracking-wider">
-                      <Zap className="w-3.5 h-3.5 fill-[#C1F034]" /> Pro Plan
-                    </div>
-                    <h2 className="text-3xl font-light mb-1">Active Subscription</h2>
-                    <p className="text-sm text-white/60">Your plan renews on May 28, 2026</p>
+                    <h2 className="text-xl font-semibold">Billing is not connected</h2>
+                    <p className="mt-2 max-w-xl text-sm text-white/50">
+                      Connect a billing provider before showing subscription plans, renewal dates, prices, or usage limits.
+                    </p>
                   </div>
-                  <div className="text-left md:text-right">
-                    <p className="text-4xl font-bold tracking-tight mb-1">$49<span className="text-lg font-medium text-white/50">/mo</span></p>
-                    <button className="px-6 py-2 bg-white text-black font-semibold rounded-full hover:bg-white/90 transition-colors mt-4 text-sm">
-                      Manage Billing
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                <div className="orion-card p-6">
-                  <div className="flex justify-between items-start mb-4">
-                    <h3 className="text-sm font-semibold">Daily Applications Limit</h3>
-                    <AlertCircle className="w-4 h-4 text-orange-400" />
-                  </div>
-                  <div className="flex items-end gap-2 mb-4">
-                    <span className="text-3xl font-bold text-white">45</span>
-                    <span className="text-sm font-medium text-white/40 mb-1">/ 50</span>
-                  </div>
-                  <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
-                    <div className="h-full bg-orange-400 w-[90%] rounded-full"></div>
-                  </div>
-                  <p className="text-xs text-white/50 mt-4 text-center">Approaching daily safety limit.</p>
-                </div>
-
-                <div className="orion-card p-6 flex flex-col justify-center items-center text-center border-dashed border-white/20 bg-transparent hover:bg-white/5 transition-colors cursor-pointer group">
-                  <div className="w-12 h-12 rounded-full bg-white/5 border border-white/10 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                    <Zap className="w-6 h-6 text-[#C1F034]" />
-                  </div>
-                  <h3 className="text-lg font-bold mb-2 text-white">Need more volume?</h3>
-                  <p className="text-sm text-white/50 mb-4 px-4">Upgrade to Power User tier for 200 daily applications.</p>
-                  <button className="px-6 py-2 bg-[#C1F034] text-black font-semibold rounded-full shadow-[0_0_15px_rgba(193,240,52,0.3)] hover:scale-105 transition-transform text-sm">
-                    Upgrade Plan
-                  </button>
                 </div>
               </div>
 

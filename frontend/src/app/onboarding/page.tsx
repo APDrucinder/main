@@ -15,9 +15,11 @@ import { ApiError } from "@/lib/api-client";
 import { submitOnboarding } from "@/lib/api";
 
 export default function OnboardingPage() {
+  const [targetRoles, setTargetRoles] = useState("");
+  const [locations, setLocations] = useState("");
   const [threshold, setThreshold] = useState(80);
-  const [experienceRange, setExperienceRange] = useState("3-5");
-  const [minSalary, setMinSalary] = useState("110000");
+  const [experienceRange, setExperienceRange] = useState("0-1");
+  const [minSalary, setMinSalary] = useState("");
   const [remoteOk, setRemoteOk] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -29,8 +31,8 @@ export default function OnboardingPage() {
     setSaveSuccess(null);
     try {
       await submitOnboarding({
-        targetRoles: ["Web Designer", "UX/UI Designer"],
-        preferredLocations: ["Los Angeles, CA"],
+        targetRoles: targetRoles.split(",").map((role) => role.trim()).filter(Boolean),
+        preferredLocations: locations.split(",").map((location) => location.trim()).filter(Boolean),
         experienceRange,
         minSalary: Number(minSalary.replace(/[^0-9]/g, "")) || 0,
         remoteOk,
@@ -82,18 +84,26 @@ export default function OnboardingPage() {
             <div className="space-y-6">
               <div>
                 <label className="text-xs font-medium text-white/60 uppercase mb-2 block">Target Roles (Multiple)</label>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  <span className="glass-pill-active px-3 py-1 text-xs font-semibold flex items-center gap-1">Web Designer <span className="cursor-pointer">×</span></span>
-                  <span className="glass-pill-active px-3 py-1 text-xs font-semibold flex items-center gap-1">UX/UI Designer <span className="cursor-pointer">×</span></span>
-                  <span className="glass-pill px-3 py-1 text-xs font-semibold border-dashed">+ Add Role</span>
-                </div>
+                <input
+                  type="text"
+                  value={targetRoles}
+                  onChange={(e) => setTargetRoles(e.target.value)}
+                  placeholder="Frontend Engineer, Product Designer"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-[#C1F034]/50"
+                />
               </div>
 
               <div>
                 <label className="text-xs font-medium text-white/60 uppercase mb-2 block">Preferred Locations</label>
-                <div className="flex flex-wrap gap-2 mb-3">
-                  <span className="glass-pill-active px-3 py-1 text-xs font-semibold flex items-center gap-1"><MapPin className="w-3 h-3" /> Los Angeles, CA <span className="cursor-pointer">×</span></span>
-                  <span className="glass-pill px-3 py-1 text-xs font-semibold border-dashed">+ Add Location</span>
+                <div className="relative">
+                  <MapPin className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                  <input
+                    type="text"
+                    value={locations}
+                    onChange={(e) => setLocations(e.target.value)}
+                    placeholder="Remote, New York, Bengaluru"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-[#C1F034]/50"
+                  />
                 </div>
               </div>
 
@@ -101,6 +111,7 @@ export default function OnboardingPage() {
                 <div>
                   <label className="text-xs font-medium text-white/60 uppercase mb-2 block">Years of Experience</label>
                   <select value={experienceRange} onChange={(e) => setExperienceRange(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#C1F034]/50 appearance-none">
+                    <option value="0-1">0 - 1 Years</option>
                     <option value="1-3">1 - 3 Years</option>
                     <option value="3-5">3 - 5 Years</option>
                     <option value="5+">5+ Years</option>
@@ -110,7 +121,7 @@ export default function OnboardingPage() {
                   <label className="text-xs font-medium text-white/60 uppercase mb-2 block">Min Salary Expectation</label>
                   <div className="relative">
                     <DollarSign className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
-                    <input type="text" value={minSalary} onChange={(e) => setMinSalary(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-3 text-sm text-white outline-none focus:border-[#C1F034]/50" />
+                    <input type="text" value={minSalary} onChange={(e) => setMinSalary(e.target.value)} placeholder="100000" className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-[#C1F034]/50" />
                   </div>
                 </div>
               </div>

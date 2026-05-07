@@ -1,17 +1,16 @@
 "use client";
 
+import { UserButton } from "@clerk/nextjs";
 import {
   Bell,
   LayoutDashboard,
   Rocket,
   Briefcase,
-  Settings,
-  LogOut
+  Settings
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { logout } from "@/app/actions/auth";
 
 const navItems = [
   { icon: LayoutDashboard, href: "/dashboard", label: "Dashboard" },
@@ -23,7 +22,7 @@ const navItems = [
 export function TopNav() {
   const pathname = usePathname();
 
-  if (pathname === "/login") {
+  if (pathname.startsWith("/login")) {
     return null;
   }
 
@@ -68,26 +67,12 @@ export function TopNav() {
 
       {/* Right Actions */}
       <div className="flex items-center gap-4">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full overflow-hidden border border-white/20">
-            <img src="https://i.pravatar.cc/150?img=47" alt="Agent" className="w-full h-full object-cover" />
-          </div>
-        </div>
-
         <button className="relative w-10 h-10 rounded-full bg-[#27272A]/40 backdrop-blur-md flex items-center justify-center text-muted-foreground hover:text-foreground transition-all duration-200 border border-white/10 shadow-sm">
           <Bell className="w-4 h-4" strokeWidth={2} />
           <span className="absolute top-2.5 right-2.5 w-1.5 h-1.5 bg-primary rounded-full shadow-sm"></span>
         </button>
 
-        <form action={logout}>
-          <button
-            type="submit"
-            className="w-10 h-10 rounded-full bg-[#27272A]/40 backdrop-blur-md flex items-center justify-center text-muted-foreground hover:text-foreground transition-all duration-200 border border-white/10 shadow-sm"
-            title="Sign out"
-          >
-            <LogOut className="w-4 h-4" strokeWidth={2} />
-          </button>
-        </form>
+        <UserButton />
       </div>
     </header>
   );

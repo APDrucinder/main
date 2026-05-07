@@ -1,11 +1,12 @@
 import os
 import ssl
 from pathlib import Path
+
 from dotenv import load_dotenv
 from sqlalchemy.ext.asyncio import (
-    create_async_engine,
     AsyncSession,
-    async_sessionmaker
+    async_sessionmaker,
+    create_async_engine,
 )
 from sqlalchemy.orm import DeclarativeBase
 
@@ -20,16 +21,20 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     raise ValueError("DATABASE_URL is missing from .env")
 
+ssl_verify = os.getenv("DB_SSL_VERIFY", "true").lower() == "true"
 ssl_context = ssl.create_default_context()
-ssl_context.check_hostname = False
-ssl_context.verify_mode = ssl.CERT_NONE
+if not ssl_verify:
+    ssl_context.check_hostname = False
+    ssl_context.verify_mode = ssl.CERT_NONE
+connect_timeout = float(os.getenv("DB_CONNECT_TIMEOUT_SECONDS", "4"))
 
 engine = create_async_engine(
     DATABASE_URL,
-    echo=False,
-    pool_size=5,
-    max_overflow=10,
-    connect_args={"ssl": ssl_context}
+    echo=os.getenv("SQL_ECHO", "false").lower() == "true",
+    pool_size=int(os.getenv("DB_POOL_SIZE", "5")),
+    max_overflow=int(os.getenv("DB_MAX_OVERFLOW", "10")),
+    pool_pre_ping=True,
+    connect_args={"ssl": ssl_context, "timeout": connect_timeout},
 )
 
 AsyncSessionLocal = async_sessionmaker(

@@ -435,3 +435,4 @@ youtube-transcript-api==1.2.2
 zeroconf==0.148.0
 zipp==3.23.0
 zstandard==0.25.0
+svix==1.21.0

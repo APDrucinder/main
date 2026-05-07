@@ -1,17 +1,13 @@
+import { SignIn } from "@clerk/nextjs";
+import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
-import { LoginForm } from "./LoginForm";
-import { ApiError } from "@/lib/api-client";
-import { requireBackendSession } from "@/lib/auth-server";
 
 export default async function LoginPage() {
-  try {
-    await requireBackendSession();
+  const { userId } = await auth();
+  if (userId) {
     redirect("/dashboard");
-  } catch (error: unknown) {
-    if (error instanceof ApiError && error.status === 401) {
-      // No valid session, render login.
-    }
   }
+
   return (
     <div className="flex min-h-[calc(100vh-3rem)] w-full items-center justify-center py-10 text-white">
       <section className="grid w-full max-w-5xl grid-cols-1 overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.03] shadow-2xl shadow-black/30 backdrop-blur-2xl md:grid-cols-[1fr_0.9fr]">
@@ -55,9 +51,43 @@ export default async function LoginPage() {
           <div className="w-full">
             <div className="mb-8">
               <h2 className="text-xl font-semibold">Welcome back</h2>
-              <p className="mt-2 text-sm text-white/45">Your session starts after the server verifies your password.</p>
+              <p className="mt-2 text-sm text-white/45"></p>
             </div>
-            <LoginForm />
+            <SignIn
+              routing="path"
+              path="/login"
+              fallbackRedirectUrl="/dashboard"
+              signUpFallbackRedirectUrl="/onboarding"
+              appearance={{
+                elements: {
+                  rootBox: "w-full",
+                  card: "bg-white border border-gray-200 shadow-sm w-full",
+                  headerTitle: "text-gray-900",
+                  headerSubtitle: "text-gray-500",
+                  socialButtonsBlockButton: "bg-white border border-gray-200 text-gray-900 hover:bg-gray-50",
+                  socialButtonsBlockButtonText: "text-gray-900",
+                  dividerLine: "bg-gray-200",
+                  dividerText: "text-gray-500",
+                  formFieldLabel: "text-gray-700",
+                  formFieldInput: "bg-white border border-gray-200 text-gray-900",
+                  footerAction: "hidden",
+                  footerBottom: "hidden",
+                  watermark: "hidden",
+                  footer: "hidden",
+                  identityPreviewText: "text-gray-900",
+                  formButtonPrimary: "bg-black text-white hover:bg-gray-800",
+                  internal: "hidden",
+                },
+                variables: {
+                  colorPrimary: "#000000",
+                  colorBackground: "#ffffff",
+                  colorText: "#111827",
+                  colorTextSecondary: "#6b7280",
+                  colorInputBackground: "#ffffff",
+                  colorInputText: "#111827",
+                }
+              }}
+            />
           </div>
         </div>
       </section>

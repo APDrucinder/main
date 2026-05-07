@@ -7,16 +7,18 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from pydantic import BaseModel, EmailStr, Field
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.auth import attach_session_cookie, clear_session_cookie, get_current_user_id
+from api.auth import AUTH_REQUIRED, DEV_USER_ID, attach_session_cookie, clear_session_cookie, get_current_user_id
 from database.connection import get_db
 from database.models import Application, Job, JobPreference, User
 
 router = APIRouter(tags=["web"])
 
-LOGIN_PASSWORD = os.getenv("AUTH_DEMO_PASSWORD", "password123")
+DEMO_LOGIN_ENABLED = os.getenv("AUTH_DEMO_LOGIN_ENABLED", "false").lower() == "true"
+LOGIN_PASSWORD = os.getenv("AUTH_DEMO_PASSWORD")
 
 
 def data_response(data: object) -> dict[str, object]:
@@ -76,21 +78,42 @@ def _user_payload(user: User) -> dict[str, str]:
     }
 
 
+def _dev_user_payload(email: str) -> dict[str, str]:
+    return {
+        "id": DEV_USER_ID or "00000000-0000-0000-0000-000000000000",
+        "email": email,
+        "subscription_tier": "free",
+    }
+
+
 @router.post("/auth/login")
 async def login(
     payload: LoginRequest,
     response: Response,
     db: AsyncSession = Depends(get_db),
 ):
+    if not DEMO_LOGIN_ENABLED or not LOGIN_PASSWORD:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=error_response("NOT_FOUND", "Password login is disabled"),
+        )
+
     if payload.password != LOGIN_PASSWORD:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=error_response("INVALID_CREDENTIALS", "Invalid email or password"),
         )
 
-    user = await _fetch_or_create_user(db, payload.email.lower())
-    await db.commit()
-    await db.refresh(user)
+    email = payload.email.lower()
+    try:
+        user = await _fetch_or_create_user(db, email)
+        await db.commit()
+        await db.refresh(user)
+    except (TimeoutError, SQLAlchemyError):
+        if AUTH_REQUIRED or not DEV_USER_ID:
+            raise
+        attach_session_cookie(response, UUID(DEV_USER_ID))
+        return data_response({"user": _dev_user_payload(email)})
 
     attach_session_cookie(response, user.id)
     return data_response({"user": _user_payload(user)})
@@ -107,7 +130,12 @@ async def me(
     current_user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    user = await db.get(User, current_user_id)
+    try:
+        user = await db.get(User, current_user_id)
+    except (TimeoutError, SQLAlchemyError):
+        if AUTH_REQUIRED:
+            raise
+        return data_response({"user": _dev_user_payload("local@example.com")})
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -125,35 +153,50 @@ async def dashboard(
     start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     start_of_week = start_of_today - timedelta(days=now.weekday())
 
-    total_result = await db.execute(
-        select(func.count(Application.id)).where(Application.user_id == current_user_id)
-    )
-    applied_today_result = await db.execute(
-        select(func.count(Application.id)).where(
-            Application.user_id == current_user_id,
-            Application.applied_at >= start_of_today,
+    try:
+        total_result = await db.execute(
+            select(func.count(Application.id)).where(Application.user_id == current_user_id)
         )
-    )
-    applied_week_result = await db.execute(
-        select(func.count(Application.id)).where(
-            Application.user_id == current_user_id,
-            Application.applied_at >= start_of_week,
+        applied_today_result = await db.execute(
+            select(func.count(Application.id)).where(
+                Application.user_id == current_user_id,
+                Application.applied_at >= start_of_today,
+            )
         )
-    )
-    interview_result = await db.execute(
-        select(func.count(Application.id)).where(
-            Application.user_id == current_user_id,
-            Application.user_feedback == "got_interview",
+        applied_week_result = await db.execute(
+            select(func.count(Application.id)).where(
+                Application.user_id == current_user_id,
+                Application.applied_at >= start_of_week,
+            )
         )
-    )
+        interview_result = await db.execute(
+            select(func.count(Application.id)).where(
+                Application.user_id == current_user_id,
+                Application.user_feedback == "got_interview",
+            )
+        )
 
-    recent_result = await db.execute(
-        select(Application, Job)
-        .join(Job, Application.job_id == Job.id)
-        .where(Application.user_id == current_user_id)
-        .order_by(Application.applied_at.desc())
-        .limit(10)
-    )
+        recent_result = await db.execute(
+            select(Application, Job)
+            .join(Job, Application.job_id == Job.id)
+            .where(Application.user_id == current_user_id)
+            .order_by(Application.applied_at.desc())
+            .limit(10)
+        )
+    except (TimeoutError, SQLAlchemyError):
+        if AUTH_REQUIRED:
+            raise
+        return data_response(
+            {
+                "stats": {
+                    "total_applied": 0,
+                    "applied_today": 0,
+                    "applied_this_week": 0,
+                    "interviews": 0,
+                },
+                "recent_applications": [],
+            }
+        )
     recent_rows = recent_result.all()
     recent = [
         {
@@ -190,12 +233,17 @@ async def applications(
     current_user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(
-        select(Application, Job)
-        .join(Job, Application.job_id == Job.id)
-        .where(Application.user_id == current_user_id)
-        .order_by(Application.applied_at.desc())
-    )
+    try:
+        result = await db.execute(
+            select(Application, Job)
+            .join(Job, Application.job_id == Job.id)
+            .where(Application.user_id == current_user_id)
+            .order_by(Application.applied_at.desc())
+        )
+    except (TimeoutError, SQLAlchemyError):
+        if AUTH_REQUIRED:
+            raise
+        return data_response({"applications": [], "total": 0})
     rows = result.all()
 
     payload = [
@@ -230,22 +278,26 @@ async def update_settings(
     current_user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(JobPreference).where(JobPreference.user_id == current_user_id))
-    preference = result.scalar_one_or_none()
+    try:
+        result = await db.execute(select(JobPreference).where(JobPreference.user_id == current_user_id))
+        preference = result.scalar_one_or_none()
 
-    if preference is None:
-        preference = JobPreference(user_id=current_user_id)
-        db.add(preference)
+        if preference is None:
+            preference = JobPreference(user_id=current_user_id)
+            db.add(preference)
 
-    preference.target_roles = payload.target_roles
-    preference.locations = payload.locations
-    preference.experience_years = payload.experience_years
-    preference.salary_min = payload.salary_min
-    preference.remote_ok = payload.remote_ok
-    preference.auto_apply_threshold = payload.auto_apply_threshold
-    preference.is_active = True
+        preference.target_roles = payload.target_roles
+        preference.locations = payload.locations
+        preference.experience_years = payload.experience_years
+        preference.salary_min = payload.salary_min
+        preference.remote_ok = payload.remote_ok
+        preference.auto_apply_threshold = payload.auto_apply_threshold
+        preference.is_active = True
 
-    await db.commit()
+        await db.commit()
+    except (TimeoutError, SQLAlchemyError):
+        if AUTH_REQUIRED:
+            raise
 
     return data_response({"settings": payload.model_dump()})
 
@@ -256,8 +308,28 @@ async def onboarding(
     current_user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    user = await db.get(User, current_user_id)
+    try:
+        user = await db.get(User, current_user_id)
+    except (TimeoutError, SQLAlchemyError):
+        user = None
+        if AUTH_REQUIRED:
+            raise
     if not user:
+        if not AUTH_REQUIRED:
+            return data_response(
+                {
+                    "user": _dev_user_payload("local@example.com"),
+                    "onboarding_completed": True,
+                    "settings": {
+                        "target_roles": payload.target_roles,
+                        "locations": payload.locations,
+                        "experience_years": payload.experience_years,
+                        "salary_min": payload.salary_min,
+                        "remote_ok": payload.remote_ok,
+                        "auto_apply_threshold": payload.auto_apply_threshold,
+                    },
+                }
+            )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=error_response("UNAUTHORIZED", "Session is invalid"),

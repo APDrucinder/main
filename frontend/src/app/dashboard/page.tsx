@@ -16,22 +16,11 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import { useUser } from "@clerk/nextjs";
 import { ApiError } from "@/lib/api-client";
 import { getDashboard } from "@/lib/api";
 import type { DashboardJob, DashboardResponse } from "@/lib/api-types";
-
-const fallbackJobs: DashboardJob[] = [
-  { title: "Web Designer", company: "Amazon", time: "6 h ago", salary: "$127k/yr", type: "Full-time", level: "Senior", location: "Los Angeles, CA", locationType: "Remote/Office", applicants: "More than 60", match: 79, initial: "a" },
-  { title: "Web Designer", company: "BeReal", time: "2 d ago", salary: "$115k/yr", type: "Full-time", level: "Middle", location: "Los Angeles, CA", locationType: "Remote", applicants: "Less than 40", match: 86, initial: "BR" },
-  { title: "UX/UI Designer", company: "Wise", time: "3 d ago", salary: "$120k/yr", type: "Full-time", level: "Senior", location: "Los Angeles, CA", locationType: "Remote/Office", applicants: "More than 30", match: 92, initial: "W", isTop: true },
-  { title: "Product Designer", company: "Spotify", time: "4 h ago", salary: "$140k/yr", type: "Full-time", level: "Senior", location: "New York, NY", locationType: "Remote", applicants: "Less than 20", match: 95, initial: "S", isTop: true },
-  { title: "Frontend Engineer", company: "Netflix", time: "1 d ago", salary: "$160k/yr", type: "Full-time", level: "Senior", location: "Los Gatos, CA", locationType: "Office", applicants: "More than 100", match: 88, initial: "N" },
-  { title: "UI Developer", company: "Figma", time: "5 h ago", salary: "$135k/yr", type: "Full-time", level: "Middle", location: "San Francisco, CA", locationType: "Remote", applicants: "Less than 50", match: 82, initial: "F" },
-  { title: "Visual Designer", company: "Apple", time: "1 w ago", salary: "$150k/yr", type: "Full-time", level: "Senior", location: "Cupertino, CA", locationType: "Office", applicants: "More than 200", match: 75, initial: "A" },
-  { title: "Interaction Designer", company: "Google", time: "2 d ago", salary: "$145k/yr", type: "Full-time", level: "Middle", location: "Mountain View, CA", locationType: "Hybrid", applicants: "More than 80", match: 81, initial: "G" },
-  { title: "Digital Designer", company: "Nike", time: "3 h ago", salary: "$110k/yr", type: "Contract", level: "Middle", location: "Portland, OR", locationType: "Remote", applicants: "Less than 20", match: 89, initial: "N" },
-  { title: "Lead Designer", company: "Airbnb", time: "4 d ago", salary: "$180k/yr", type: "Full-time", level: "Lead", location: "San Francisco, CA", locationType: "Remote", applicants: "More than 150", match: 96, initial: "A", isTop: true },
-];
 
 const scanSteps = [
   "Parsing resume...",
@@ -102,11 +91,20 @@ function JobCard({ job }: { job: DashboardJob }) {
   );
 }
 export default function DashboardPage() {
+  const { isLoaded, isSignedIn } = useUser();
+  const router = useRouter();
+
   const [isScanning, setIsScanning] = useState(false);
   const [scanStep, setScanStep] = useState(0);
   const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
   const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isLoaded && !isSignedIn) {
+      router.push("/login");
+    }
+  }, [isLoaded, isSignedIn, router]);
 
   useEffect(() => {
     if (isScanning && scanStep < scanSteps.length - 1) {
@@ -128,6 +126,7 @@ export default function DashboardPage() {
     let mounted = true;
 
     async function loadDashboard() {
+      if (!isLoaded || !isSignedIn) return;
       try {
         const data = await getDashboard();
         if (mounted) {
@@ -152,9 +151,21 @@ export default function DashboardPage() {
     return () => {
       mounted = false;
     };
-  }, []);
+  }, [isLoaded, isSignedIn]);
 
-  const jobs = dashboardData?.jobs ?? fallbackJobs;
+  const jobs = dashboardData?.jobs ?? [];
+  const matched = dashboardData?.matched ?? 0;
+  const matchedDelta = dashboardData?.matchedDelta ?? 0;
+  const applied = dashboardData?.applied ?? 0;
+  const appliedDelta = dashboardData?.appliedDelta ?? 0;
+  const interviews = dashboardData?.interviews ?? 0;
+  const activeFeeds = dashboardData?.activeFeeds ?? 0;
+  const activeFeedsDelta = dashboardData?.activeFeedsDelta ?? 0;
+  const successRate = matched > 0 ? ((applied / matched) * 100).toFixed(1) : "0.0";
+
+  if (!isLoaded || !isSignedIn) {
+    return <div className="min-h-screen flex items-center justify-center text-white">Loading...</div>;
+  }
 
   return (
     <div className="w-full max-w-[1600px] mx-auto animate-in fade-in duration-700 font-sans mt-2 pb-20 text-white">
@@ -287,15 +298,15 @@ export default function DashboardPage() {
               </div>
               <div className="flex items-end gap-6 mb-4">
                 <div>
-                  <div className="text-2xl font-bold stat-number">{dashboardData?.matched ?? 142}<span className="text-[10px] text-[#C1F034] ml-1 align-top">+{dashboardData?.matchedDelta ?? 12}%</span></div>
+                  <div className="text-2xl font-bold stat-number">{matched}<span className="text-[10px] text-[#C1F034] ml-1 align-top">+{matchedDelta}%</span></div>
                   <div className="text-[10px] text-white/50 uppercase mt-1">Matched</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold stat-number">{dashboardData?.applied ?? 45}<span className="text-[10px] text-[#C1F034] ml-1 align-top">+{dashboardData?.appliedDelta ?? 5}%</span></div>
+                  <div className="text-2xl font-bold stat-number">{applied}<span className="text-[10px] text-[#C1F034] ml-1 align-top">+{appliedDelta}%</span></div>
                   <div className="text-[10px] text-white/50 uppercase mt-1">Applied</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold stat-number">{dashboardData?.interviews ?? 8}<span className="text-[10px] text-white/50 ml-1 align-top"></span></div>
+                  <div className="text-2xl font-bold stat-number">{interviews}<span className="text-[10px] text-white/50 ml-1 align-top"></span></div>
                   <div className="text-[10px] text-white/50 uppercase mt-1">Interviews</div>
                 </div>
               </div>
@@ -313,9 +324,7 @@ export default function DashboardPage() {
                   <ArrowUpRight className="w-3 h-3 text-white/40" />
                 </div>
                 <div className="text-2xl font-bold mb-4">
-                  {dashboardData?.matched && dashboardData?.applied
-                    ? ((dashboardData.applied / dashboardData.matched) * 100).toFixed(1)
-                    : "18.4"}
+                  {successRate}
                   <span className="text-xs text-[#C1F034] ml-0.5 align-top">%</span>
                 </div>
                 <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden flex">
@@ -334,7 +343,7 @@ export default function DashboardPage() {
                   <ArrowUpRight className="w-3 h-3 text-white/40" />
                 </div>
                 <div className="text-2xl font-bold mb-4">
-                  {(dashboardData?.activeFeeds ?? 2415).toLocaleString()}<span className="text-xs text-[#C1F034] ml-0.5 align-top">+{dashboardData?.activeFeedsDelta ?? 14}</span>
+                  {activeFeeds.toLocaleString()}<span className="text-xs text-[#C1F034] ml-0.5 align-top">+{activeFeedsDelta}</span>
                 </div>
                 <div className="flex items-end gap-1 h-6">
                   {[40, 70, 45, 90, 60, 30, 80, 100, 50].map((val, i) => (
@@ -433,11 +442,21 @@ export default function DashboardPage() {
             </button>
           </div>
 
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 h-[800px] overflow-y-auto custom-scroll pr-2 pb-20">
-            {jobs.map((job, idx) => (
-              <JobCard key={idx} job={job} />
-            ))}
-          </div>
+          {jobs.length > 0 ? (
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 h-[800px] overflow-y-auto custom-scroll pr-2 pb-20">
+              {jobs.map((job, idx) => (
+                <JobCard key={`${job.company}-${job.title}-${idx}`} job={job} />
+              ))}
+            </div>
+          ) : (
+            <div className="orion-card flex h-80 flex-col items-center justify-center px-6 text-center">
+              <Briefcase className="mb-4 h-8 w-8 text-white/35" />
+              <h3 className="text-lg font-semibold text-white">No matched jobs yet</h3>
+              <p className="mt-2 max-w-md text-sm text-white/45">
+                Start a scan after completing onboarding to populate this feed with real matches.
+              </p>
+            </div>
+          )}
         </div>
 
       </div>

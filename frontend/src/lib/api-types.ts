@@ -2,8 +2,9 @@
 export interface User {
   id: string;
   email: string;
-  name: string;
-  role: string;
+  name?: string;
+  role?: string;
+  subscription_tier?: string;
 }
 
 export interface DashboardJob {
@@ -33,7 +34,7 @@ export interface DashboardResponse {
 }
 
 export interface Application {
-  id: number;
+  id: string | number;
   company: string;
   role: string;
   score: number;
