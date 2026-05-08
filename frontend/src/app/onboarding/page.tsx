@@ -8,11 +8,14 @@ import {
   DollarSign,
   Globe,
   Settings,
-  FileText
+  FileText,
+  CheckCircle2,
+  Loader2,
+  X
 } from "lucide-react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ApiError } from "@/lib/api-client";
-import { submitOnboarding } from "@/lib/api";
+import { submitOnboarding, uploadResume } from "@/lib/api";
 
 export default function OnboardingPage() {
   const [targetRoles, setTargetRoles] = useState("");
@@ -24,6 +27,44 @@ export default function OnboardingPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+
+  // Resume upload state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadSuccess, setUploadSuccess] = useState<string | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  function handleFileSelect(file: File) {
+    const allowed = ["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"];
+    if (!allowed.includes(file.type)) {
+      setUploadError("Only PDF and Word files are accepted.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setUploadError("File too large. Maximum 5MB.");
+      return;
+    }
+    setSelectedFile(file);
+    setUploadError(null);
+    setUploadSuccess(null);
+  }
+
+  async function handleUpload() {
+    if (!selectedFile) return;
+    setUploading(true);
+    setUploadError(null);
+    setUploadSuccess(null);
+    try {
+      const result = await uploadResume(selectedFile);
+      setUploadSuccess(result.message || "Resume uploaded successfully!");
+    } catch (error) {
+      setUploadError(error instanceof ApiError ? error.message : "Failed to upload resume.");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function handleSubmitOnboarding() {
     setSaving(true);
@@ -66,13 +107,75 @@ export default function OnboardingPage() {
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
               <FileText className="w-5 h-5 text-[#C1F034]" /> Resume
             </h2>
-            <div className="w-full border-2 border-dashed border-white/10 rounded-2xl p-10 flex flex-col items-center justify-center bg-white/5 hover:bg-white/10 transition-colors cursor-pointer group">
-              <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <Upload className="w-8 h-8 text-white/50" />
+
+            {uploadSuccess ? (
+              <div className="w-full border-2 border-[#C1F034]/30 rounded-2xl p-10 flex flex-col items-center justify-center bg-[#C1F034]/5">
+                <CheckCircle2 className="w-12 h-12 text-[#C1F034] mb-4" />
+                <p className="font-medium text-[#C1F034]">{uploadSuccess}</p>
+                <p className="text-xs text-white/40 mt-2">{selectedFile?.name}</p>
+                <button
+                  type="button"
+                  onClick={() => { setSelectedFile(null); setUploadSuccess(null); }}
+                  className="mt-4 text-xs text-white/50 hover:text-white underline"
+                >
+                  Upload a different file
+                </button>
               </div>
-              <p className="font-medium">Click to upload or drag and drop</p>
-              <p className="text-xs text-white/40 mt-2">PDF, DOCX up to 10MB</p>
-            </div>
+            ) : selectedFile ? (
+              <div className="w-full border-2 border-[#C1F034]/30 rounded-2xl p-8 flex flex-col items-center justify-center bg-white/5">
+                <FileText className="w-12 h-12 text-[#C1F034] mb-3" />
+                <p className="font-medium text-white">{selectedFile.name}</p>
+                <p className="text-xs text-white/40 mt-1">{(selectedFile.size / 1024).toFixed(0)} KB</p>
+                <div className="flex gap-3 mt-6">
+                  <button
+                    type="button"
+                    onClick={handleUpload}
+                    disabled={uploading}
+                    className="px-6 py-2.5 bg-[#C1F034] text-black font-bold rounded-xl hover:bg-[#A3E635] transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(193,240,52,0.2)]"
+                  >
+                    {uploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</> : <><Upload className="w-4 h-4" /> Upload Resume</>}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => { setSelectedFile(null); setUploadError(null); }}
+                    className="px-4 py-2.5 bg-white/5 border border-white/10 text-white/60 rounded-xl hover:bg-white/10 transition-colors flex items-center gap-2"
+                  >
+                    <X className="w-4 h-4" /> Remove
+                  </button>
+                </div>
+                {uploadError && <p className="mt-3 text-xs text-red-300">{uploadError}</p>}
+              </div>
+            ) : (
+              <div
+                className={`w-full border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center transition-colors cursor-pointer group ${isDragging ? "border-[#C1F034] bg-[#C1F034]/10" : "border-white/10 bg-white/5 hover:bg-white/10"}`}
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDragging(false);
+                  const file = e.dataTransfer.files[0];
+                  if (file) handleFileSelect(file);
+                }}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,.doc,.docx"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleFileSelect(file);
+                  }}
+                />
+                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
+                  <Upload className="w-8 h-8 text-white/50" />
+                </div>
+                <p className="font-medium">Click to upload or drag and drop</p>
+                <p className="text-xs text-white/40 mt-2">PDF, DOCX up to 5MB</p>
+                {uploadError && <p className="mt-3 text-xs text-red-300">{uploadError}</p>}
+              </div>
+            )}
           </div>
 
           {/* Core Preferences */}

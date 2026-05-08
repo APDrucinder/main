@@ -11,6 +11,7 @@ from dotenv import load_dotenv
 from fastapi import Depends, Header, HTTPException, Request, Response, status
 from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from jwt import InvalidTokenError, PyJWKClient
+from jwt.exceptions import PyJWKClientError
 from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -78,7 +79,7 @@ def _verify_clerk_token(token: str) -> dict[str, Any]:
             issuer=issuer,
             options={"verify_aud": False},
         )
-    except InvalidTokenError as exc:
+    except (InvalidTokenError, PyJWKClientError, KeyError, ValueError) as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid Clerk session",

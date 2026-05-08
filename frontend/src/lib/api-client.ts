@@ -44,7 +44,17 @@ function getBaseUrl() {
 
 async function getClerkToken() {
   if (typeof window === "undefined") return null;
-  return window.Clerk?.session?.getToken() ?? null;
+  try {
+    // Right after sign-in, Clerk session can take a moment to hydrate.
+    for (let attempt = 0; attempt < 5; attempt += 1) {
+      const token = await window.Clerk?.session?.getToken();
+      if (token) return token;
+      await new Promise((resolve) => setTimeout(resolve, 120));
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 export async function apiRequest<T>(

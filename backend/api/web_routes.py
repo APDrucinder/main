@@ -149,32 +149,27 @@ async def dashboard(
     current_user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    now = datetime.now(timezone.utc)
+    now = datetime.utcnow()
     start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     start_of_week = start_of_today - timedelta(days=now.weekday())
 
     try:
-        total_result = await db.execute(
-            select(func.count(Application.id)).where(Application.user_id == current_user_id)
+        from sqlalchemy import cast, Integer
+
+        stats_result = await db.execute(
+            select(
+                func.count(Application.id).label("total"),
+                func.sum(cast(Application.applied_at >= start_of_today, Integer)).label("today"),
+                func.sum(cast(Application.applied_at >= start_of_week, Integer)).label("week"),
+                func.sum(cast(Application.user_feedback == "got_interview", Integer)).label("interviews"),
+            ).where(Application.user_id == current_user_id)
         )
-        applied_today_result = await db.execute(
-            select(func.count(Application.id)).where(
-                Application.user_id == current_user_id,
-                Application.applied_at >= start_of_today,
-            )
-        )
-        applied_week_result = await db.execute(
-            select(func.count(Application.id)).where(
-                Application.user_id == current_user_id,
-                Application.applied_at >= start_of_week,
-            )
-        )
-        interview_result = await db.execute(
-            select(func.count(Application.id)).where(
-                Application.user_id == current_user_id,
-                Application.user_feedback == "got_interview",
-            )
-        )
+        
+        stats = stats_result.one()
+        total_applied = stats.total or 0
+        applied_today = stats.today or 0
+        applied_week = stats.week or 0
+        interviews = stats.interviews or 0
 
         recent_result = await db.execute(
             select(Application, Job)
@@ -218,10 +213,10 @@ async def dashboard(
     return data_response(
         {
             "stats": {
-                "total_applied": total_result.scalar() or 0,
-                "applied_today": applied_today_result.scalar() or 0,
-                "applied_this_week": applied_week_result.scalar() or 0,
-                "interviews": interview_result.scalar() or 0,
+                "total_applied": total_applied,
+                "applied_today": applied_today,
+                "applied_this_week": applied_week,
+                "interviews": interviews,
             },
             "recent_applications": recent,
         }

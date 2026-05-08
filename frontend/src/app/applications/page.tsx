@@ -21,7 +21,6 @@ import type { Application } from "@/lib/api-types";
 
 export default function ApplicationsPage() {
   const [applications, setApplications] = useState<Application[]>([]);
-  const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -36,8 +35,6 @@ export default function ApplicationsPage() {
       } catch (error) {
         if (!mounted) return;
         setLoadError(error instanceof ApiError ? error.message : "Unable to load applications.");
-      } finally {
-        if (mounted) setLoading(false);
       }
     }
 
@@ -73,7 +70,7 @@ export default function ApplicationsPage() {
 
   return (
     <div className="w-full max-w-[1400px] mx-auto animate-in fade-in duration-700 font-sans mt-8 pb-20 text-white">
-      {loading ? (
+      {!applications.length && !loadError ? (
         <p className="mb-4 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-xs text-white/60">
           Loading applications...
         </p>

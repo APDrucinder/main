@@ -14,7 +14,6 @@ import {
   Activity,
   Briefcase
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
@@ -97,7 +96,6 @@ export default function DashboardPage() {
   const [isScanning, setIsScanning] = useState(false);
   const [scanStep, setScanStep] = useState(0);
   const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
-  const [loadingData, setLoadingData] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -140,10 +138,6 @@ export default function DashboardPage() {
         } else {
           setLoadError("Unable to load dashboard data.");
         }
-      } finally {
-        if (mounted) {
-          setLoadingData(false);
-        }
       }
     }
 
@@ -169,7 +163,7 @@ export default function DashboardPage() {
 
   return (
     <div className="w-full max-w-[1600px] mx-auto animate-in fade-in duration-700 font-sans mt-2 pb-20 text-white">
-      {loadingData ? (
+      {!dashboardData && !loadError ? (
         <p className="mb-4 rounded-lg border border-white/10 bg-white/[0.03] px-4 py-2 text-xs text-white/60">
           Loading dashboard...
         </p>
@@ -243,12 +237,8 @@ export default function DashboardPage() {
               Agent Operations
             </h2>
 
-            <AnimatePresence mode="wait">
-              {!isScanning ? (
-                <motion.div
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  className="flex flex-col items-center justify-center py-8"
-                >
+            {!isScanning ? (
+              <div className="flex flex-col items-center justify-center py-8">
                   <button
                     onClick={startScan}
                     className="w-24 h-24 rounded-full bg-[#C1F034] text-black flex items-center justify-center hover:scale-105 transition-transform shadow-[0_0_30px_rgba(193,240,52,0.4)]"
@@ -257,12 +247,9 @@ export default function DashboardPage() {
                   </button>
                   <p className="mt-6 font-medium text-white/80">Start new scan</p>
                   <p className="text-xs text-white/50 mt-2 text-center max-w-[200px]">Agent will search, filter, and auto-apply based on your settings.</p>
-                </motion.div>
+                </div>
               ) : (
-                <motion.div
-                  initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-                  className="py-4"
-                >
+                <div className="py-4">
                   <div className="space-y-4">
                     {scanSteps.map((step, idx) => {
                       const isActive = idx === scanStep;
@@ -282,9 +269,8 @@ export default function DashboardPage() {
                       )
                     })}
                   </div>
-                </motion.div>
+                </div>
               )}
-            </AnimatePresence>
           </div>
 
           <div className="absolute right-0 top-0 bottom-0 flex flex-col justify-between py-6 w-[320px] pointer-events-none z-20">

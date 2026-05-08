@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from typing import List
 
@@ -109,8 +110,12 @@ async def database_connection_timeout_handler(_: Request, __: TimeoutError):
     )
 
 
+logger = logging.getLogger("aiagents")
+
+
 @app.exception_handler(SQLAlchemyError)
-async def database_exception_handler(_: Request, __: SQLAlchemyError):
+async def database_exception_handler(_: Request, exc: SQLAlchemyError):
+    logger.exception("SQLAlchemy error: %s", exc)
     return JSONResponse(
         status_code=503,
         content={
@@ -123,7 +128,8 @@ async def database_exception_handler(_: Request, __: SQLAlchemyError):
 
 
 @app.exception_handler(Exception)
-async def unhandled_exception_handler(_: Request, __: Exception):
+async def unhandled_exception_handler(_: Request, exc: Exception):
+    logger.exception("Unhandled error: %s", exc)
     return JSONResponse(
         status_code=500,
         content={

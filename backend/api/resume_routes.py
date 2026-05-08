@@ -23,12 +23,11 @@ MAX_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 
 @router.post("/upload")
 async def upload_resume_endpoint(
-    user_id: UUID,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
     current_user_id: UUID = Depends(get_current_user_id),
 ):
-    assert_user_scope(current_user_id, user_id)
+    user_id = current_user_id
 
     suffix = ALLOWED_TYPES.get(file.content_type)
     if not suffix:
@@ -63,10 +62,12 @@ async def upload_resume_endpoint(
     await db.refresh(resume_record)
 
     return {
-        "resume_id": str(resume_record.id),
-        "file_url": file_url,
-        "status": "uploaded",
-        "message": "Resume uploaded. Parsing will begin shortly.",
+        "data": {
+            "resume_id": str(resume_record.id),
+            "file_url": file_url,
+            "status": "uploaded",
+            "message": "Resume uploaded. Parsing will begin shortly.",
+        }
     }
 
 
@@ -90,8 +91,10 @@ async def get_resume(
         raise HTTPException(status_code=404, detail="No resume found for this user")
 
     return {
-        "resume_id": str(resume.id),
-        "file_url": resume.file_url,
-        "parsed_data": resume.parsed_data,
-        "uploaded_at": resume.uploaded_at.isoformat() if resume.uploaded_at else None,
+        "data": {
+            "resume_id": str(resume.id),
+            "file_url": resume.file_url,
+            "parsed_data": resume.parsed_data,
+            "uploaded_at": resume.uploaded_at.isoformat() if resume.uploaded_at else None,
+        }
     }

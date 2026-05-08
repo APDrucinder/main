@@ -165,6 +165,18 @@ export async function updateSettings(payload: SettingsPayload) {
   });
 }
 
+export async function uploadResume(file: File) {
+  const formData = new FormData();
+  formData.append("file", file);
+  return apiRequest<{ resume_id: string; file_url: string; status: string; message: string }>(
+    "/resume/upload",
+    {
+      method: "POST",
+      body: formData,
+    }
+  );
+}
+
 export async function submitOnboarding(payload: OnboardingPayload) {
   return apiRequest<{ onboarding_completed: boolean }>("/onboarding", {
     method: "POST",
