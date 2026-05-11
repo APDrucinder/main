@@ -1,14 +1,27 @@
-# Scraper CSS Selectors Configuration
-# ─────────────────────────────────────
-# Update these when job sites change their DOM structure.
-# No code changes required — just update the selectors below.
-#
-# Format: "tag.classname" (e.g., "div.job-card" → <div class="job-card">)
+# Scraper CSS Selectors & API Configuration
+# ─────────────────────────────────────────────
+# Update these when job sites change their DOM structure or API.
+# No code changes required — just update the values below.
 
 naukri:
+  # ── API-first approach (primary) ──────────────────────────
+  api_url: "https://www.naukri.com/jobapi/v3/search"
+  api_headers:
+    appid: "109"
+    systemid: "Naukri"
+  cache_ttl_seconds: 7200       # 2 hours
+  max_pages: 3
+  results_per_page: 20
+  rate_limit_per_minute: 10
+
+  # ── Selenium fallback selectors ───────────────────────────
   job_card_container: "div.srp-jobtuple-wrapper"
-  title_link: "a.title"
-  company_link: "a.comp-name"
+  row1: "div.row1"       # Job title + apply URL
+  row2: "div.row2"       # Company name + rating
+  row3: "div.row3"       # Experience + location
+  row4: "div.row4"       # Brief description / requirements
+  row5: "div.row5"       # Tech stack tags
+  row6: "div.row6"       # Posted date / metadata
 
 # Future platforms can be added here:
 # glassdoor:
