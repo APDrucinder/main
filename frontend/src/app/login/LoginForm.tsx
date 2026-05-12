@@ -14,7 +14,7 @@ function SubmitButton() {
     <button
       type="submit"
       disabled={pending}
-      className="h-12 w-full rounded-xl bg-[#C1F034] px-5 text-sm font-bold text-black shadow-[0_0_22px_rgba(193,240,52,0.24)] transition hover:bg-[#A3E635] disabled:cursor-not-allowed disabled:opacity-70"
+      className="h-12 w-full rounded-xl bg-white px-5 text-sm font-bold text-black shadow-[0_0_22px_rgba(255,255,255,0.08)] transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-70"
     >
       <span className="flex items-center justify-center gap-2">
         {pending ? "Signing in" : "Sign in"}
@@ -33,7 +33,7 @@ export function LoginForm() {
         <label htmlFor="email" className="text-xs font-semibold uppercase text-white/50">
           Email
         </label>
-        <div className="flex h-12 items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 transition focus-within:border-[#C1F034]/60">
+        <div className="flex h-12 items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 transition focus-within:border-white/40">
           <Mail className="h-4 w-4 text-white/40" />
           <input
             id="email"
@@ -51,7 +51,7 @@ export function LoginForm() {
         <label htmlFor="password" className="text-xs font-semibold uppercase text-white/50">
           Password
         </label>
-        <div className="flex h-12 items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 transition focus-within:border-[#C1F034]/60">
+        <div className="flex h-12 items-center gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 transition focus-within:border-white/40">
           <Lock className="h-4 w-4 text-white/40" />
           <input
             id="password"

@@ -5,35 +5,36 @@
 :root {
   --font-sans: "Inter", system-ui, -apple-system, sans-serif;
   
-  /* Deep Dark Theme (Orion Design) */
-  --background: #09090B; /* Deepest black/grey */
-  --foreground: #FAFAFA;
+  /* Deep Matte Black Theme (DeFi reference) */
+  --background: #0A0A0A;
+  --foreground: #F5F5F5;
   
   --card: rgba(255, 255, 255, 0.03);
-  --card-foreground: #FAFAFA;
+  --card-foreground: #F5F5F5;
   
-  --popover: rgba(20, 20, 20, 0.9);
-  --popover-foreground: #FAFAFA;
+  --popover: rgba(15, 15, 15, 0.95);
+  --popover-foreground: #F5F5F5;
   
-  --primary: #C1F034; /* Lime green from image */
+  /* Primary accent: pure white (no neon) */
+  --primary: #FFFFFF;
   --primary-foreground: #000000;
   
   --secondary: rgba(255, 255, 255, 0.05);
-  --secondary-foreground: #FAFAFA;
+  --secondary-foreground: #F5F5F5;
   
-  --muted: rgba(255, 255, 255, 0.1);
-  --muted-foreground: #A1A1AA;
+  --muted: rgba(255, 255, 255, 0.08);
+  --muted-foreground: #71717A;
   
-  --accent: rgba(255, 255, 255, 0.08);
-  --accent-foreground: #FAFAFA;
+  --accent: rgba(255, 255, 255, 0.06);
+  --accent-foreground: #F5F5F5;
   
   --destructive: #EF4444;
   
-  --border: rgba(255, 255, 255, 0.1);
-  --input: rgba(255, 255, 255, 0.05);
-  --ring: #C1F034;
+  --border: rgba(255, 255, 255, 0.07);
+  --input: rgba(255, 255, 255, 0.04);
+  --ring: rgba(255, 255, 255, 0.3);
   
-  --chart-1: #C1F034;
+  --chart-1: #FFFFFF;
   --chart-2: #27272A;
   --chart-3: #3F3F46;
   --chart-4: #52525B;
@@ -65,9 +66,8 @@
   --color-card: var(--card);
   
   /* Dashboard custom palette */
-  --color-emerald: #C1F034;
-  --color-surface: #121214;
-  --color-surface-hover: #1A1A1E;
+  --color-surface: #111111;
+  --color-surface-hover: #181818;
 }
 
 @layer base {
@@ -82,21 +82,21 @@
 }
 
 /* ========================================
-   DARK GLASS DESIGN SYSTEM (ORION)
+   DARK MONOCHROME DESIGN SYSTEM
    ======================================== */
 @layer utilities {
   /* Orion Base Card */
   .orion-card {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
     border-radius: 1.5rem;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
   }
   
   .orion-card-inner {
-    background: rgba(0, 0, 0, 0.2);
+    background: rgba(0, 0, 0, 0.3);
     border-radius: 1rem;
     border: 1px solid rgba(255, 255, 255, 0.05);
   }
@@ -105,46 +105,49 @@
   .glass-pill {
     background: transparent;
     border: 1px solid transparent;
-    color: var(--muted-foreground);
+    color: #71717A;
     border-radius: 9999px;
-    box-shadow: inset 0 0 0 transparent;
   }
   
   .glass-pill-active {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 1) 0%, rgba(220, 220, 220, 1) 100%);
+    background: #FFFFFF;
     color: #000000;
-    border: 1px solid rgba(255, 255, 255, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.9);
     box-shadow: 
-      0 4px 12px rgba(255, 255, 255, 0.15),
+      0 2px 8px rgba(255, 255, 255, 0.12),
       inset 0 1px 1px rgba(255, 255, 255, 0.9);
   }
 
   .glass-pill:hover:not(.glass-pill-active) {
-    background: rgba(255, 255, 255, 0.08);
-    color: #FFFFFF;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.06);
+    color: #D4D4D8;
+    border: 1px solid rgba(255, 255, 255, 0.08);
   }
   
   .nav-pill-container {
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.01) 100%);
-    border: 1px solid rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.07);
     box-shadow: 
-      0 8px 32px -4px rgba(0, 0, 0, 0.4),
-      inset 0 1px 1px rgba(255, 255, 255, 0.1),
-      inset 0 -1px 1px rgba(0, 0, 0, 0.2);
-    backdrop-filter: blur(24px) saturate(140%);
-    -webkit-backdrop-filter: blur(24px) saturate(140%);
+      0 8px 32px -4px rgba(0, 0, 0, 0.6),
+      inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(24px) saturate(120%);
+    -webkit-backdrop-filter: blur(24px) saturate(120%);
     border-radius: 9999px;
     padding: 0.35rem;
   }
 
-  /* Glows */
+  /* Glows — soft gray, no neon */
   .glow-neon {
-    box-shadow: 0 0 20px rgba(193, 240, 52, 0.4), inset 0 0 10px rgba(193, 240, 52, 0.2);
+    box-shadow: 0 0 24px rgba(255, 255, 255, 0.06), inset 0 0 12px rgba(255, 255, 255, 0.03);
   }
   
   .text-glow {
-    text-shadow: 0 0 12px rgba(193, 240, 52, 0.6);
+    text-shadow: 0 0 16px rgba(255, 255, 255, 0.25);
+  }
+
+  /* Ambient background blob */
+  .ambient-glow {
+    background: radial-gradient(ellipse at center, rgba(180, 200, 180, 0.07) 0%, transparent 70%);
   }
 
   /* Custom Scrollbar */
@@ -155,11 +158,11 @@
     background: transparent;
   }
   .custom-scroll::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(255, 255, 255, 0.08);
     border-radius: 4px;
   }
   .custom-scroll::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.15);
   }
 
   /* Number display */
@@ -167,4 +170,35 @@
     font-variant-numeric: tabular-nums;
     letter-spacing: -0.03em;
   }
+
+  /* Range input styling */
+  input[type="range"] {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 100%;
+    height: 4px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 9999px;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 9999px;
+    background: #FFFFFF;
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 9999px;
+    background: #FFFFFF;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 0 8px rgba(255, 255, 255, 0.3);
+  }
 }
+

@@ -103,15 +103,15 @@ export default function OnboardingPage() {
         <div className="lg:col-span-8 space-y-6">
 
           {/* Resume Upload */}
-          <div className="orion-card p-6 border border-[#C1F034]/20">
+          <div className="orion-card p-6 border border-white/20">
             <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-              <FileText className="w-5 h-5 text-[#C1F034]" /> Resume
+              <FileText className="w-5 h-5 text-white" /> Resume
             </h2>
 
             {uploadSuccess ? (
-              <div className="w-full border-2 border-[#C1F034]/30 rounded-2xl p-10 flex flex-col items-center justify-center bg-[#C1F034]/5">
-                <CheckCircle2 className="w-12 h-12 text-[#C1F034] mb-4" />
-                <p className="font-medium text-[#C1F034]">{uploadSuccess}</p>
+              <div className="w-full border-2 border-white/30 rounded-2xl p-10 flex flex-col items-center justify-center bg-white/5">
+                <CheckCircle2 className="w-12 h-12 text-white mb-4" />
+                <p className="font-medium text-white">{uploadSuccess}</p>
                 <p className="text-xs text-white/40 mt-2">{selectedFile?.name}</p>
                 <button
                   type="button"
@@ -122,8 +122,8 @@ export default function OnboardingPage() {
                 </button>
               </div>
             ) : selectedFile ? (
-              <div className="w-full border-2 border-[#C1F034]/30 rounded-2xl p-8 flex flex-col items-center justify-center bg-white/5">
-                <FileText className="w-12 h-12 text-[#C1F034] mb-3" />
+              <div className="w-full border-2 border-white/30 rounded-2xl p-8 flex flex-col items-center justify-center bg-white/5">
+                <FileText className="w-12 h-12 text-white mb-3" />
                 <p className="font-medium text-white">{selectedFile.name}</p>
                 <p className="text-xs text-white/40 mt-1">{(selectedFile.size / 1024).toFixed(0)} KB</p>
                 <div className="flex gap-3 mt-6">
@@ -131,7 +131,7 @@ export default function OnboardingPage() {
                     type="button"
                     onClick={handleUpload}
                     disabled={uploading}
-                    className="px-6 py-2.5 bg-[#C1F034] text-black font-bold rounded-xl hover:bg-[#A3E635] transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-[0_0_15px_rgba(193,240,52,0.2)]"
+                    className="px-6 py-2.5 bg-white text-black font-bold rounded-xl hover:bg-zinc-200 transition-colors flex items-center gap-2 disabled:opacity-70 disabled:cursor-not-allowed shadow-[0_0_12px_rgba(255,255,255,0.06)]"
                   >
                     {uploading ? <><Loader2 className="w-4 h-4 animate-spin" /> Uploading...</> : <><Upload className="w-4 h-4" /> Upload Resume</>}
                   </button>
@@ -147,7 +147,7 @@ export default function OnboardingPage() {
               </div>
             ) : (
               <div
-                className={`w-full border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center transition-colors cursor-pointer group ${isDragging ? "border-[#C1F034] bg-[#C1F034]/10" : "border-white/10 bg-white/5 hover:bg-white/10"}`}
+                className={`w-full border-2 border-dashed rounded-2xl p-10 flex flex-col items-center justify-center transition-colors cursor-pointer group ${isDragging ? "border-white bg-white/10" : "border-white/10 bg-white/5 hover:bg-white/10"}`}
                 onClick={() => fileInputRef.current?.click()}
                 onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
                 onDragLeave={() => setIsDragging(false)}
@@ -181,7 +181,7 @@ export default function OnboardingPage() {
           {/* Core Preferences */}
           <div className="orion-card p-6">
             <h2 className="text-lg font-semibold mb-6 flex items-center gap-2">
-              <Briefcase className="w-5 h-5 text-[#C1F034]" /> Target Preferences
+              <Briefcase className="w-5 h-5 text-white" /> Target Preferences
             </h2>
 
             <div className="space-y-6">
@@ -192,7 +192,7 @@ export default function OnboardingPage() {
                   value={targetRoles}
                   onChange={(e) => setTargetRoles(e.target.value)}
                   placeholder="Frontend Engineer, Product Designer"
-                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-[#C1F034]/50"
+                  className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-white/50"
                 />
               </div>
 
@@ -205,7 +205,7 @@ export default function OnboardingPage() {
                     value={locations}
                     onChange={(e) => setLocations(e.target.value)}
                     placeholder="Remote, New York, Bengaluru"
-                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-[#C1F034]/50"
+                    className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-white/50"
                   />
                 </div>
               </div>
@@ -213,7 +213,7 @@ export default function OnboardingPage() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="text-xs font-medium text-white/60 uppercase mb-2 block">Years of Experience</label>
-                  <select value={experienceRange} onChange={(e) => setExperienceRange(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-[#C1F034]/50 appearance-none">
+                  <select value={experienceRange} onChange={(e) => setExperienceRange(e.target.value)} className="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-sm text-white outline-none focus:border-white/50 appearance-none">
                     <option value="0-1">0 - 1 Years</option>
                     <option value="1-3">1 - 3 Years</option>
                     <option value="3-5">3 - 5 Years</option>
@@ -224,7 +224,7 @@ export default function OnboardingPage() {
                   <label className="text-xs font-medium text-white/60 uppercase mb-2 block">Min Salary Expectation</label>
                   <div className="relative">
                     <DollarSign className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
-                    <input type="text" value={minSalary} onChange={(e) => setMinSalary(e.target.value)} placeholder="100000" className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-[#C1F034]/50" />
+                    <input type="text" value={minSalary} onChange={(e) => setMinSalary(e.target.value)} placeholder="100000" className="w-full bg-white/5 border border-white/10 rounded-xl pl-9 pr-4 py-3 text-sm text-white outline-none placeholder:text-white/25 focus:border-white/50" />
                   </div>
                 </div>
               </div>
@@ -240,7 +240,7 @@ export default function OnboardingPage() {
                   </div>
                 </div>
                 {/* Custom Toggle */}
-                <button type="button" onClick={() => setRemoteOk((prev) => !prev)} className={`w-12 h-6 rounded-full relative cursor-pointer border shadow-[0_0_15px_rgba(193,240,52,0.2)] ${remoteOk ? "bg-[#C1F034] border-[#C1F034]/20" : "bg-white/10 border-white/20"}`}>
+                <button type="button" onClick={() => setRemoteOk((prev) => !prev)} className={`w-12 h-6 rounded-full relative cursor-pointer border shadow-[0_0_12px_rgba(255,255,255,0.06)] ${remoteOk ? "bg-white border-white/20" : "bg-white/10 border-white/20"}`}>
                   <div className={`absolute top-1 w-4 h-4 bg-black rounded-full shadow-sm transition-all ${remoteOk ? "right-1" : "left-1"}`}></div>
                 </button>
               </div>
@@ -255,13 +255,13 @@ export default function OnboardingPage() {
           {/* Threshold Slider */}
           <div className="orion-card p-6">
             <h2 className="text-lg font-semibold mb-6 flex items-center gap-2">
-              <Settings className="w-5 h-5 text-[#C1F034]" /> Agent Settings
+              <Settings className="w-5 h-5 text-white" /> Agent Settings
             </h2>
 
             <div className="mb-6">
               <div className="flex justify-between items-end mb-4">
                 <label className="text-xs font-medium text-white/60 uppercase">Auto-Apply Threshold</label>
-                <span className="text-xl font-bold text-[#C1F034]">{threshold}%</span>
+                <span className="text-xl font-bold text-white">{threshold}%</span>
               </div>
               <input
                 type="range"
@@ -277,20 +277,20 @@ export default function OnboardingPage() {
 
             <div className="w-full h-px bg-white/10 my-6"></div>
 
-            <button type="button" onClick={handleSubmitOnboarding} disabled={saving} className="w-full py-4 bg-[#C1F034] text-black font-bold rounded-xl hover:bg-[#A3E635] transition-colors flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(193,240,52,0.3)] disabled:cursor-not-allowed disabled:opacity-70">
+            <button type="button" onClick={handleSubmitOnboarding} disabled={saving} className="w-full py-4 bg-white text-black font-bold rounded-xl hover:bg-zinc-200 transition-colors flex items-center justify-center gap-2 shadow-[0_0_16px_rgba(255,255,255,0.06)] disabled:cursor-not-allowed disabled:opacity-70">
               Save & Start Agent <ChevronRight className="w-4 h-4" />
             </button>
             {saveError ? <p className="mt-3 text-center text-xs text-red-300">{saveError}</p> : null}
-            {saveSuccess ? <p className="mt-3 text-center text-xs text-[#C1F034]">{saveSuccess}</p> : null}
+            {saveSuccess ? <p className="mt-3 text-center text-xs text-white">{saveSuccess}</p> : null}
           </div>
 
           {/* Info Card */}
           <div className="orion-card p-6 border border-white/5 bg-transparent">
             <h3 className="text-sm font-semibold mb-2">How it works</h3>
             <ul className="text-xs text-white/50 space-y-3">
-              <li className="flex gap-2"><span className="text-[#C1F034]">•</span> Your resume is parsed by our LLM to extract key skills and experiences.</li>
-              <li className="flex gap-2"><span className="text-[#C1F034]">•</span> The Agent continuously scans job boards for matches.</li>
-              <li className="flex gap-2"><span className="text-[#C1F034]">•</span> Applications are sent automatically if they meet your threshold.</li>
+              <li className="flex gap-2"><span className="text-white">•</span> Your resume is parsed by our LLM to extract key skills and experiences.</li>
+              <li className="flex gap-2"><span className="text-white">•</span> The Agent continuously scans job boards for matches.</li>
+              <li className="flex gap-2"><span className="text-white">•</span> Applications are sent automatically if they meet your threshold.</li>
             </ul>
           </div>
 

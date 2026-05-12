@@ -21,7 +21,7 @@ export default async function LoginPage() {
             </div>
 
             <div className="max-w-sm">
-              <p className="mb-3 text-xs font-bold uppercase tracking-[0.22em] text-[#C1F034]">
+              <p className="mb-3 text-xs font-bold uppercase tracking-[0.22em] text-white">
                 Secure Access
               </p>
               <h1 className="text-4xl font-light uppercase tracking-tight md:text-5xl">

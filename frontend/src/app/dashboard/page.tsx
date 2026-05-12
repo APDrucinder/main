@@ -32,7 +32,7 @@ const scanSteps = [
 function JobCard({ job }: { job: DashboardJob }) {
   const isTopMatch = job.match >= 90 || job.isTop;
   return (
-    <div className="orion-card p-5 relative overflow-hidden group hover:border-[#C1F034]/30 transition-colors flex flex-col h-full">
+    <div className="orion-card p-5 relative overflow-hidden group hover:border-white/20 transition-colors flex flex-col h-full">
       <div className="flex justify-between items-start mb-6">
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-black font-bold text-xl uppercase">
@@ -70,14 +70,14 @@ function JobCard({ job }: { job: DashboardJob }) {
         <div className="relative w-20 h-20 flex items-center justify-center shrink-0">
           <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
             <circle cx="50" cy="50" r="40" fill="transparent" stroke="rgba(255,255,255,0.1)" strokeWidth="6" />
-            <circle cx="50" cy="50" r="40" fill="transparent" stroke="#C1F034" strokeWidth="6" strokeDasharray="251.2" strokeDashoffset={251.2 * (1 - job.match / 100)} strokeLinecap="round" />
+            <circle cx="50" cy="50" r="40" fill="transparent" stroke="#FFFFFF" strokeWidth="6" strokeDasharray="251.2" strokeDashoffset={251.2 * (1 - job.match / 100)} strokeLinecap="round" />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <span className="text-xl font-bold text-white leading-none">{job.match}%</span>
-            <span className="text-[8px] text-[#C1F034] uppercase font-bold mt-0.5">{isTopMatch ? 'Top Match' : 'Strong Match'}</span>
+            <span className="text-[8px] text-white/70 uppercase font-bold mt-0.5">{isTopMatch ? 'Top Match' : 'Strong Match'}</span>
           </div>
           {job.match >= 85 && (
-            <div className="absolute -left-4 top-2 w-6 h-6 rounded-full bg-[#C1F034] flex items-center justify-center border-2 border-[#121214]">
+            <div className="absolute -left-4 top-2 w-6 h-6 rounded-full bg-[#FFFFFF] flex items-center justify-center border-2 border-[#0A0A0A]">
               <Heart className="w-3 h-3 text-black fill-black" />
             </div>
           )}
@@ -208,11 +208,11 @@ export default function DashboardPage() {
                 <line x1="0" y1="60" x2="300" y2="60" stroke="rgba(255,255,255,0.05)" strokeWidth="1" />
 
                 <polygon points="0,80 50,65 100,75 150,50 200,65 250,30 300,45 300,80 0,80" fill="url(#diagonalHatchDark)" />
-                <polyline points="0,80 50,65 100,75 150,50 200,65 250,30 300,45" fill="none" stroke="#C1F034" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                <polyline points="0,80 50,65 100,75 150,50 200,65 250,30 300,45" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
 
-                <circle cx="150" cy="50" r="4" fill="#C1F034" />
+                <circle cx="150" cy="50" r="4" fill="#FFFFFF" />
                 <g transform="translate(150, 50)">
-                  <rect x="-18" y="-20" width="36" height="14" rx="7" fill="#C1F034" />
+                  <rect x="-18" y="-20" width="36" height="14" rx="7" fill="#FFFFFF" />
                   <text x="0" y="-10.5" fontSize="8" fontWeight="bold" fill="black" textAnchor="middle">48%</text>
                 </g>
                 <circle cx="250" cy="30" r="3" fill="white" />
@@ -229,11 +229,11 @@ export default function DashboardPage() {
         {/* Center/Right Area */}
         <div className="lg:col-span-7 relative flex justify-center items-center">
 
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] bg-[#C1F034]/10 blur-[100px] rounded-full pointer-events-none" />
+          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full pointer-events-none" style={{background: 'radial-gradient(ellipse at center, rgba(160,190,160,0.09) 0%, transparent 65%)', filter: 'blur(80px)'}} />
 
-          <div className="relative z-10 w-full max-w-md orion-card p-8 border border-[#C1F034]/20 glow-neon">
+          <div className="relative z-10 w-full max-w-md orion-card p-8 border border-white/10 glow-neon">
             <h2 className="text-xl font-semibold mb-6 flex items-center gap-2">
-              <Activity className="w-5 h-5 text-[#C1F034]" />
+              <Activity className="w-5 h-5 text-white/70" />
               Agent Operations
             </h2>
 
@@ -241,7 +241,7 @@ export default function DashboardPage() {
               <div className="flex flex-col items-center justify-center py-8">
                   <button
                     onClick={startScan}
-                    className="w-24 h-24 rounded-full bg-[#C1F034] text-black flex items-center justify-center hover:scale-105 transition-transform shadow-[0_0_30px_rgba(193,240,52,0.4)]"
+                    className="w-24 h-24 rounded-full bg-[#FFFFFF] text-black flex items-center justify-center hover:scale-105 transition-transform shadow-[0_0_30px_rgba(255,255,255,0.12)]"
                   >
                     <Play className="w-8 h-8 ml-1" />
                   </button>
@@ -256,12 +256,12 @@ export default function DashboardPage() {
                       const isPast = idx < scanStep;
                       return (
                         <div key={step} className="flex items-center gap-4">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors ${isPast ? 'bg-[#C1F034] border-[#C1F034] text-black' :
-                            isActive ? 'bg-white/10 border-[#C1F034] text-[#C1F034]' : 'bg-transparent border-white/20 text-white/30'
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors ${isPast ? 'bg-white border-white text-black' :
+                            isActive ? 'bg-white/10 border-white/60 text-white' : 'bg-transparent border-white/20 text-white/30'
                             }`}>
                             {isPast ? <Check className="w-4 h-4" /> : isActive ? <Loader2 className="w-4 h-4 animate-spin" /> : <div className="w-1.5 h-1.5 rounded-full bg-current" />}
                           </div>
-                          <span className={`text-sm font-medium transition-colors ${isPast ? 'text-white' : isActive ? 'text-[#C1F034]' : 'text-white/30'
+                          <span className={`text-sm font-medium transition-colors ${isPast ? 'text-white' : isActive ? 'text-white' : 'text-white/30'
                             }`}>
                             {step}
                           </span>
@@ -284,11 +284,11 @@ export default function DashboardPage() {
               </div>
               <div className="flex items-end gap-6 mb-4">
                 <div>
-                  <div className="text-2xl font-bold stat-number">{matched}<span className="text-[10px] text-[#C1F034] ml-1 align-top">+{matchedDelta}%</span></div>
+                  <div className="text-2xl font-bold stat-number">{matched}<span className="text-[10px] text-white/60 ml-1 align-top">+{matchedDelta}%</span></div>
                   <div className="text-[10px] text-white/50 uppercase mt-1">Matched</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold stat-number">{applied}<span className="text-[10px] text-[#C1F034] ml-1 align-top">+{appliedDelta}%</span></div>
+                  <div className="text-2xl font-bold stat-number">{applied}<span className="text-[10px] text-white/60 ml-1 align-top">+{appliedDelta}%</span></div>
                   <div className="text-[10px] text-white/50 uppercase mt-1">Applied</div>
                 </div>
                 <div>
@@ -299,7 +299,7 @@ export default function DashboardPage() {
               <div className="flex bg-white/5 rounded-full p-1 border border-white/10 mt-2">
                 <div className="flex-1 bg-black rounded-full py-1 text-center text-[10px] font-bold text-white">Jobs</div>
                 <div className="flex-1 rounded-full py-1 text-center text-[10px] font-medium text-white/60">Apps</div>
-                <div className="flex-1 bg-[#C1F034] rounded-full py-1 text-center text-[10px] font-bold text-black">Intvs</div>
+                <div className="flex-1 bg-[#FFFFFF] rounded-full py-1 text-center text-[10px] font-bold text-black">Intvs</div>
               </div>
             </div>
 
@@ -311,7 +311,7 @@ export default function DashboardPage() {
                 </div>
                 <div className="text-2xl font-bold mb-4">
                   {successRate}
-                  <span className="text-xs text-[#C1F034] ml-0.5 align-top">%</span>
+                  <span className="text-xs text-white/60 ml-0.5 align-top">%</span>
                 </div>
                 <div className="w-full h-1.5 bg-white/10 rounded-full overflow-hidden flex">
                   <div className="h-full bg-white w-1/3"></div>
@@ -329,11 +329,11 @@ export default function DashboardPage() {
                   <ArrowUpRight className="w-3 h-3 text-white/40" />
                 </div>
                 <div className="text-2xl font-bold mb-4">
-                  {activeFeeds.toLocaleString()}<span className="text-xs text-[#C1F034] ml-0.5 align-top">+{activeFeedsDelta}</span>
+                  {activeFeeds.toLocaleString()}<span className="text-xs text-white/60 ml-0.5 align-top">+{activeFeedsDelta}</span>
                 </div>
                 <div className="flex items-end gap-1 h-6">
                   {[40, 70, 45, 90, 60, 30, 80, 100, 50].map((val, i) => (
-                    <div key={i} className={`flex-1 rounded-sm ${i === 7 ? 'bg-[#C1F034]' : 'bg-white/20'}`} style={{ height: `${val}%` }} />
+                    <div key={i} className={`flex-1 rounded-sm ${i === 7 ? 'bg-[#FFFFFF]' : 'bg-white/20'}`} style={{ height: `${val}%` }} />
                   ))}
                 </div>
               </div>
@@ -350,7 +350,7 @@ export default function DashboardPage() {
         {/* Left Sidebar: Filters */}
         <div className="w-full lg:w-[280px] lg:sticky lg:top-8 shrink-0">
           <div className="flex items-center gap-2 mb-6">
-            <Filter className="w-5 h-5 text-[#C1F034]" />
+            <Filter className="w-5 h-5 text-white/70" />
             <h2 className="text-xl font-semibold">Filters</h2>
           </div>
 
@@ -359,7 +359,7 @@ export default function DashboardPage() {
               <h3 className="text-sm font-medium text-white/80 mb-3">Match Score</h3>
               <div className="space-y-2">
                 <label className="flex items-center gap-3 cursor-pointer group">
-                  <div className="w-4 h-4 rounded border border-white/20 group-hover:border-[#C1F034] flex items-center justify-center bg-[#C1F034] text-black transition-colors">
+                  <div className="w-4 h-4 rounded border border-white/20 group-hover:border-white flex items-center justify-center bg-white text-black transition-colors">
                     <Check className="w-3 h-3" />
                   </div>
                   <span className="text-sm text-white/70 group-hover:text-white transition-colors">&gt; 80% (Strong Match)</span>
@@ -393,11 +393,11 @@ export default function DashboardPage() {
                   <span className="text-sm text-white/70 group-hover:text-white transition-colors">Junior</span>
                 </label>
                 <label className="flex items-center gap-3 cursor-pointer group">
-                  <div className="w-4 h-4 rounded border border-white/20 group-hover:border-[#C1F034] flex items-center justify-center bg-[#C1F034] text-black transition-colors"><Check className="w-3 h-3" /></div>
+                  <div className="w-4 h-4 rounded border border-white/20 group-hover:border-white flex items-center justify-center bg-white text-black transition-colors"><Check className="w-3 h-3" /></div>
                   <span className="text-sm text-white/70 group-hover:text-white transition-colors">Middle</span>
                 </label>
                 <label className="flex items-center gap-3 cursor-pointer group">
-                  <div className="w-4 h-4 rounded border border-white/20 group-hover:border-[#C1F034] flex items-center justify-center bg-[#C1F034] text-black transition-colors"><Check className="w-3 h-3" /></div>
+                  <div className="w-4 h-4 rounded border border-white/20 group-hover:border-white flex items-center justify-center bg-white text-black transition-colors"><Check className="w-3 h-3" /></div>
                   <span className="text-sm text-white/70 group-hover:text-white transition-colors">Senior</span>
                 </label>
               </div>
@@ -408,7 +408,7 @@ export default function DashboardPage() {
             <div>
               <h3 className="text-sm font-medium text-white/80 mb-3">Salary Range</h3>
               <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden mt-4">
-                <div className="w-1/2 h-full bg-[#C1F034] ml-1/4"></div>
+                <div className="w-1/2 h-full bg-[#FFFFFF] ml-1/4"></div>
               </div>
               <div className="flex justify-between mt-2 text-xs text-white/50">
                 <span>$80k</span>

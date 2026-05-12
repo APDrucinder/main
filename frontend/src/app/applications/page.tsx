@@ -58,13 +58,13 @@ export default function ApplicationsPage() {
 
   const getStatusConfig = (status: string) => {
     switch (status) {
-      case "Applied": return { icon: CheckCircle2, color: "text-[#C1F034]", bg: "bg-[#C1F034]/10" };
-      case "Matched": return { icon: Clock, color: "text-blue-400", bg: "bg-blue-400/10" };
+      case "Applied": return { icon: CheckCircle2, color: "text-white", bg: "bg-white/10" };
+      case "Matched": return { icon: Clock, color: "text-white/70", bg: "bg-white/5" };
       case "Failed": return { icon: XCircle, color: "text-red-400", bg: "bg-red-400/10" };
-      case "Manual Required": return { icon: AlertCircle, color: "text-orange-400", bg: "bg-orange-400/10" };
-      case "Needs Credentials": return { icon: AlertCircle, color: "text-yellow-400", bg: "bg-yellow-400/10" };
-      case "Below Threshold": return { icon: Filter, color: "text-white/40", bg: "bg-white/5" };
-      default: return { icon: Clock, color: "text-white/60", bg: "bg-white/10" };
+      case "Manual Required": return { icon: AlertCircle, color: "text-white/60", bg: "bg-white/[0.06]" };
+      case "Needs Credentials": return { icon: AlertCircle, color: "text-white/50", bg: "bg-white/[0.04]" };
+      case "Below Threshold": return { icon: Filter, color: "text-white/30", bg: "bg-white/[0.02]" };
+      default: return { icon: Clock, color: "text-white/50", bg: "bg-white/[0.04]" };
     }
   };
 
@@ -105,8 +105,8 @@ export default function ApplicationsPage() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         {[
           { label: "Total Sent", value: String(stats.total) },
-          { label: "Interviews", value: String(stats.interviews), color: "text-[#C1F034]" },
-          { label: "Failed/Manual", value: String(stats.failedOrManual), color: "text-orange-400" },
+          { label: "Interviews", value: String(stats.interviews), color: "text-white" },
+          { label: "Failed/Manual", value: String(stats.failedOrManual), color: "text-red-400" },
           { label: "Success Rate", value: stats.successRate }
         ].map((stat, i) => (
           <div key={i} className="orion-card p-4">
@@ -154,7 +154,7 @@ export default function ApplicationsPage() {
                     <div className="relative w-10 h-10 flex items-center justify-center">
                       <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
                         <circle cx="50" cy="50" r="40" fill="transparent" stroke="rgba(255,255,255,0.1)" strokeWidth="8" />
-                        <circle cx="50" cy="50" r="40" fill="transparent" stroke={app.score >= 80 ? "#C1F034" : "#38BDF8"} strokeWidth="8" strokeDasharray="251.2" strokeDashoffset={251.2 * (1 - app.score / 100)} strokeLinecap="round" />
+                        <circle cx="50" cy="50" r="40" fill="transparent" stroke="rgba(255,255,255,0.5)" strokeWidth="8" strokeDasharray="251.2" strokeDashoffset={251.2 * (1 - app.score / 100)} strokeLinecap="round" />
                       </svg>
                       <div className="absolute inset-0 flex items-center justify-center">
                         <span className="text-[10px] font-bold">{app.score}</span>
@@ -179,13 +179,13 @@ export default function ApplicationsPage() {
                   {/* Feedback */}
                   <div className="col-span-2">
                     {app.feedback ? (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#C1F034]/20 border border-[#C1F034]/30 text-[#C1F034] text-[10px] font-bold">
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/10 border border-white/20 text-white text-[10px] font-bold">
                         <MessageSquare className="w-3 h-3" />
                         {app.feedback}
                       </span>
                     ) : (
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button className="w-6 h-6 rounded bg-white/10 flex items-center justify-center hover:bg-[#C1F034]/20 hover:text-[#C1F034] transition-colors" title="Got Interview">
+                        <button className="w-6 h-6 rounded bg-white/10 flex items-center justify-center hover:bg-white/20 hover:text-white transition-colors" title="Got Interview">
                           <ThumbsUp className="w-3 h-3" />
                         </button>
                         <button className="w-6 h-6 rounded bg-white/10 flex items-center justify-center hover:bg-red-500/20 hover:text-red-400 transition-colors" title="Rejected">
