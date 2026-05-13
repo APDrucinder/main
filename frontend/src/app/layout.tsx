@@ -20,7 +20,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <ClerkProvider>
+    <ClerkProvider
+      signInUrl="/login"
+      signUpUrl="/login"
+      signInFallbackRedirectUrl="/dashboard"
+      signUpFallbackRedirectUrl="/onboarding"
+    >
       <html lang="en" className={`${inter.variable} h-full antialiased dark`}>
         <body className="min-h-full flex bg-background text-foreground font-sans">
           <div className="flex-1 w-full px-6 flex flex-col min-h-screen relative">

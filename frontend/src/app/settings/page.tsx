@@ -134,7 +134,7 @@ export default function SettingsPage() {
                     <div className="mt-3 flex items-start gap-2 rounded-lg bg-white/5 border border-white/10 px-3 py-2.5">
                       <AlertCircle className="w-3.5 h-3.5 text-white/50 mt-0.5 flex-shrink-0" />
                       <p className="text-xs text-white/50 leading-relaxed">
-                        <span className="font-semibold text-white/70">Capped at 75%</span> — To protect your account from being flagged as a bot, we've limited auto-apply to a maximum threshold of 75%. Applying to too many jobs too aggressively triggers platform spam detection.
+                        <span className="font-semibold text-white/70">Capped at 75%</span> — To protect your account from being flagged as a bot, we&apos;ve limited auto-apply to a maximum threshold of 75%. Applying to too many jobs too aggressively triggers platform spam detection.
                       </p>
                     </div>
                   </div>

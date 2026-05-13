@@ -15,8 +15,8 @@ import {
   Briefcase
 } from "lucide-react";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { useUser } from "@clerk/nextjs";
+import { isClerkHandshakeSearch } from "@/lib/clerk-oauth-return";
 import { ApiError } from "@/lib/api-client";
 import { getDashboard } from "@/lib/api";
 import type { DashboardJob, DashboardResponse } from "@/lib/api-types";
@@ -91,18 +91,14 @@ function JobCard({ job }: { job: DashboardJob }) {
 }
 export default function DashboardPage() {
   const { isLoaded, isSignedIn } = useUser();
-  const router = useRouter();
+  const clerkHandshakePending =
+    typeof window !== "undefined" &&
+    isClerkHandshakeSearch(window.location.search);
 
   const [isScanning, setIsScanning] = useState(false);
   const [scanStep, setScanStep] = useState(0);
   const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (isLoaded && !isSignedIn) {
-      router.push("/login");
-    }
-  }, [isLoaded, isSignedIn, router]);
 
   useEffect(() => {
     if (isScanning && scanStep < scanSteps.length - 1) {
@@ -157,8 +153,30 @@ export default function DashboardPage() {
   const activeFeedsDelta = dashboardData?.activeFeedsDelta ?? 0;
   const successRate = matched > 0 ? ((applied / matched) * 100).toFixed(1) : "0.0";
 
-  if (!isLoaded || !isSignedIn) {
-    return <div className="min-h-screen flex items-center justify-center text-white">Loading...</div>;
+  if (!isLoaded) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-white">
+        Loading…
+      </div>
+    );
+  }
+
+  if (!isSignedIn) {
+    if (clerkHandshakePending) {
+      return (
+        <div className="min-h-screen flex flex-col items-center justify-center gap-2 text-white">
+          <p className="text-sm text-white/80">Completing sign-in…</p>
+          <p className="max-w-md text-center text-xs text-white/50">
+            Syncing your session with Clerk. This page should continue automatically.
+          </p>
+        </div>
+      );
+    }
+    return (
+      <div className="min-h-screen flex items-center justify-center text-white">
+        Redirecting…
+      </div>
+    );
   }
 
   return (
