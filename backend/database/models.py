@@ -26,6 +26,7 @@ class User(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     clerk_id = Column(String, unique=True, nullable=False)
     email = Column(String, unique=True, nullable=False)
+    phone = Column(String, nullable=True)  # WhatsApp digest (E.164 format, e.g. +919876543210)
     subscription_tier = Column(String, default="free", nullable=False)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     platform_credentials = Column(JSONB, default=dict, nullable=True)

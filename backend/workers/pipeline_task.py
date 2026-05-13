@@ -6,6 +6,7 @@ from sqlalchemy import select
 
 from workers.celery_app import celery_app
 from agents.job_scraper import JobScraper
+from agents.job_scorer import JobScorer
 from agents.pre_filter import PreFilter
 from agents.resume_parser import ResumeParser
 from database.connection import AsyncSessionLocal
@@ -134,10 +135,18 @@ async def fetch_platform_credentials(user_id: str):
             return None
 
 
-async def save_results_to_db(user_id: str, results: list, threshold: float):
+async def save_scored_results_to_db(user_id: str, scored_results: list, threshold: float):
     """
-    Upserts Job rows, inserts Application rows (skips duplicates).
-    Status is determined by auto_apply_status stamped onto each result.
+    Upserts Job rows and Application rows from LLM-scored results only.
+    Each item in scored_results is a ScoredResult dataclass with:
+      .job   — JobPosting
+      .score — int (LLM match score 0–100)
+      .reason — str (LLM reasoning)
+      .matched_skills — list[str]
+      .missing_skills — list[str]
+      .should_apply  — bool (score >= threshold)
+      .auto_apply_status   — str | None (stamped by _stamp_results)
+      .auto_apply_platform — str | None (stamped by _stamp_results)
 
     Status values written to DB:
       applied           — bot submitted successfully
@@ -150,7 +159,7 @@ async def save_results_to_db(user_id: str, results: list, threshold: float):
     user_uuid = _parse_user_uuid(user_id)
     async with AsyncSessionLocal() as session:
         try:
-            for r in results:
+            for r in scored_results:
                 # ── Upsert job row ──────────────────────────────────────
                 existing = await session.execute(
                     select(Job).where(Job.apply_url == r.job.apply_url)
@@ -208,7 +217,7 @@ async def save_results_to_db(user_id: str, results: list, threshold: float):
                     match_score=r.score,
                     matched_skills=getattr(r, "matched_skills", []),
                     missing_skills=getattr(r, "missing_skills", []),
-                    reasoning=r.reason,
+                    reasoning=getattr(r, "reason", getattr(r, "reasoning", "")),
                     status=status,
                     platform=auto_platform,
                     applied_at=datetime.utcnow(),
@@ -223,7 +232,7 @@ async def save_results_to_db(user_id: str, results: list, threshold: float):
                 )
 
             await session.commit()
-            logger.info("DB save complete", count=len(results))
+            logger.info("DB save complete", count=len(scored_results))
 
         except Exception as e:
             await session.rollback()
@@ -331,7 +340,7 @@ async def run_auto_apply(
 
 
 def _stamp_results(scored_results: list, apply_map: dict) -> None:
-    """Stamps auto_apply_status and auto_apply_platform onto each result object."""
+    """Stamps auto_apply_status and auto_apply_platform onto each ScoredResult."""
     for r in scored_results:
         outcome = apply_map.get(r.job.apply_url)
         if outcome:
@@ -340,6 +349,28 @@ def _stamp_results(scored_results: list, apply_map: dict) -> None:
         else:
             r.auto_apply_status   = None
             r.auto_apply_platform = None
+
+
+class ScoredResult:
+    """
+    Unified result object wrapping LLM-scored job data for DB saving.
+    Combines JobPosting + MatchScore into a single object that
+    save_scored_results_to_db, _stamp_results, and run_auto_apply can all read.
+    """
+    __slots__ = (
+        "job", "score", "reason", "matched_skills", "missing_skills",
+        "should_apply", "auto_apply_status", "auto_apply_platform",
+    )
+
+    def __init__(self, job, match_score):
+        self.job            = job
+        self.score          = match_score.score
+        self.reason         = match_score.reasoning
+        self.matched_skills = match_score.matched_skills
+        self.missing_skills = match_score.missing_skills
+        self.should_apply   = match_score.should_apply
+        self.auto_apply_status   = None
+        self.auto_apply_platform = None
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -401,40 +432,66 @@ def run_pipeline_task(self, user_id: str, resume_path: str, locations: list = No
     # ── Step 3: Pre-filter ────────────────────────────────────────────
     self.update_state(state="STARTED", meta={"step": "filtering_jobs"})
     pre_filter = PreFilter()
-    results    = asyncio.run(
+    filter_results = asyncio.run(
         pre_filter.filter_all(jobs, resume_obj.skills, pref_remote=prefs["remote_ok"])
     )
-    passed = sorted([r for r in results if r.passed], key=lambda r: r.score, reverse=True)
-    logger.info("Pre-filter done", passed=len(passed), total=len(results))
+    passed_filter = sorted(
+        [r for r in filter_results if r.passed], key=lambda r: r.score, reverse=True
+    )
+    logger.info("Pre-filter done", passed=len(passed_filter), total=len(filter_results))
 
-    # ── Step 4: Auto-apply ────────────────────────────────────────────
+    if not passed_filter:
+        logger.warning("No jobs passed pre-filter", user_id=user_id)
+        return {"status": "complete", "total_passed": 0, "jobs": []}
+
+    # ── Step 4: LLM Scoring ───────────────────────────────────────────
+    self.update_state(state="STARTED", meta={"step": "scoring_jobs"})
+    scorer = JobScorer(apply_threshold=threshold)
+    raw_scored = asyncio.run(
+        scorer.score_batch(
+            resume=resume_obj,
+            jobs=[r.job for r in passed_filter],
+            max_jobs=15,
+        )
+    )
+    # Wrap into ScoredResult objects for uniform DB saving
+    scored_results = [ScoredResult(job, match_score) for job, match_score in raw_scored]
+    passed_scored  = [r for r in scored_results if r.should_apply]
+    logger.info(
+        "LLM scoring done",
+        scored=len(scored_results),
+        above_threshold=len(passed_scored),
+    )
+
+    # ── Step 5: Auto-apply ────────────────────────────────────────────
     apply_results: list[dict] = []
     resume_for_apply = resume_file_url or resume_path
-    if AUTO_APPLY_ENABLED and passed and not AUTO_APPLY_DRY_RUN:
+    if AUTO_APPLY_ENABLED and passed_scored and not AUTO_APPLY_DRY_RUN:
         self.update_state(state="STARTED", meta={"step": "auto_applying"})
         user_data   = build_user_data(resume_obj, prefs)
         credentials = asyncio.run(fetch_platform_credentials(user_id))
         apply_results = asyncio.run(
-            run_auto_apply(passed, user_id, user_data, resume_for_apply, credentials, threshold)
+            run_auto_apply(passed_scored, user_id, user_data, resume_for_apply, credentials, threshold)
         )
     elif AUTO_APPLY_DRY_RUN:
         logger.info("DRY RUN — skipping browser submissions", user_id=user_id)
 
-    # ── Stamp + save ──────────────────────────────────────────────────
+    # ── Stamp + save (LLM-scored results only) ────────────────────────
     self.update_state(state="STARTED", meta={"step": "saving_to_database"})
-    _stamp_results(results, {a["url"]: a for a in apply_results})
-    asyncio.run(save_results_to_db(user_id, results, threshold))
+    _stamp_results(scored_results, {a["url"]: a for a in apply_results})
+    asyncio.run(save_scored_results_to_db(user_id, scored_results, threshold))
 
     applied_count = len([a for a in apply_results if a["success"]])
     logger.info(
         "Pipeline complete",
         user_id=user_id,
-        total_passed=len(passed),
+        total_scored=len(scored_results),
         auto_applied=applied_count,
     )
     return {
         "status":       "complete",
-        "total_passed": len(passed),
+        "total_scored": len(scored_results),
+        "total_passed": len(passed_scored),
         "auto_applied": applied_count,
         "jobs": [
             {
@@ -444,10 +501,10 @@ def run_pipeline_task(self, user_id: str, resume_path: str, locations: list = No
                 "score":    r.score,
                 "reason":   r.reason,
                 "url":      r.job.apply_url,
-                "status":   getattr(r, "auto_apply_status", None),
-                "platform": getattr(r, "auto_apply_platform", None),
+                "status":   r.auto_apply_status,
+                "platform": r.auto_apply_platform,
             }
-            for r in passed
+            for r in scored_results
         ],
     }
 
@@ -505,23 +562,34 @@ async def execute_pipeline_task(
             num_per_search=DEFAULT_NUM_JOBS,
         )
 
-        pre_filter = PreFilter()
-        results    = await pre_filter.filter_all(
+        pre_filter   = PreFilter()
+        filter_res   = await pre_filter.filter_all(
             jobs, resume_obj.skills, pref_remote=prefs["remote_ok"]
         )
-        passed = sorted([r for r in results if r.passed], key=lambda r: r.score, reverse=True)
+        passed_filter = sorted(
+            [r for r in filter_res if r.passed], key=lambda r: r.score, reverse=True
+        )
+
+        # LLM scoring on pre-filtered jobs
+        scorer     = JobScorer(apply_threshold=threshold)
+        raw_scored = await scorer.score_batch(
+            resume=resume_obj,
+            jobs=[r.job for r in passed_filter],
+            max_jobs=15,
+        )
+        scored_results = [ScoredResult(job, match_score) for job, match_score in raw_scored]
+        passed_scored  = [r for r in scored_results if r.should_apply]
 
         pipeline_result = type("R", (), {
             "resume":         resume_obj,
-            "scored_results": results,
-            "passed_results": passed,
+            "scored_results": scored_results,
+            "passed_results": passed_scored,
         })()
 
     passed_results  = pipeline_result.passed_results
     resume_obj      = pipeline_result.resume
     resume_file_url = getattr(resume_obj, "file_url", None)
 
-   
     apply_results: list[dict] = []
     if AUTO_APPLY_ENABLED and passed_results:
         task.update_state(state="STARTED", meta={"step": "auto_applying"})
@@ -551,10 +619,9 @@ async def execute_pipeline_task(
                 passed_results, user_id, user_data, resume_file_url, credentials, threshold
             )
 
-   
     task.update_state(state="STARTED", meta={"step": "saving_to_database"})
     _stamp_results(pipeline_result.scored_results, {a["url"]: a for a in apply_results})
-    await save_results_to_db(user_id, pipeline_result.scored_results, threshold)
+    await save_scored_results_to_db(user_id, pipeline_result.scored_results, threshold)
 
     applied_count = len([a for a in apply_results if a["success"]])
     logger.info(

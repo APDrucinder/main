@@ -12,7 +12,7 @@ from database.models import Application, User
 TIER_LIMITS = {
     "free": 10,
     "pro": 100,
-    "max": float("inf"),
+    "power": float("inf"),
 }
 
 

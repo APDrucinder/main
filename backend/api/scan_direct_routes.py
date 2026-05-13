@@ -13,6 +13,20 @@ from pydantic import BaseModel, Field
 
 from api.auth import get_current_user_id
 from shared.logger import logger
+from workers.pipeline_task import (
+    ScoredResult,
+    _stamp_results,
+    build_user_data,
+    fetch_platform_credentials,
+    fetch_resume_file_url,
+    fetch_user_preferences,
+    run_auto_apply,
+    save_scored_results_to_db,
+)
+import os
+
+AUTO_APPLY_ENABLED: bool = os.getenv("AUTO_APPLY_ENABLED", "true").lower() == "true"
+AUTO_APPLY_DRY_RUN: bool = os.getenv("AUTO_APPLY_DRY_RUN", "false").lower() == "true"
 
 router = APIRouter(prefix="/scan", tags=["scan-direct"])
 
@@ -76,81 +90,119 @@ async def _execute_scan(
     locations: list[str] | None,
     resume_path: str | None,
 ):
-    """Run the pipeline and update scan state as it progresses."""
-    from pipeline import JobApplicationPipeline, UserPreferences
-    from database.connection import AsyncSessionLocal
-    from database.models import JobPreference, Resume
-    from sqlalchemy import select
+    """Run the full pipeline (parse → scrape → pre-filter → LLM score → auto-apply → DB save)."""
+    from agents.job_scraper import JobScraper
+    from agents.job_scorer import JobScorer
+    from agents.pre_filter import PreFilter
+    from agents.resume_parser import ResumeParser
 
     scan = _scans[scan_id]
 
     try:
-        # Load user preferences and resume from DB
-        async with AsyncSessionLocal() as db:
-            pref_result = await db.execute(
-                select(JobPreference).where(
-                    JobPreference.user_id == uuid.UUID(user_id)
-                )
-            )
-            pref = pref_result.scalar_one_or_none()
+        # ── Load preferences + resume URL from DB ────────────────────
+        scan["step"] = "loading_preferences"
+        prefs = await fetch_user_preferences(user_id)
+        effective_locations = locations or prefs["locations"]
+        threshold = prefs["threshold"]
+        resume_file_url = await fetch_resume_file_url(user_id)
+        actual_resume = resume_path or resume_file_url or "Dhruv_Resume.pdf"
 
-            resume_result = await db.execute(
-                select(Resume)
-                .where(Resume.user_id == uuid.UUID(user_id))
-                .order_by(Resume.uploaded_at.desc())
-                .limit(1)
-            )
-            resume_record = resume_result.scalar_one_or_none()
+        # ── Parse resume ──────────────────────────────────────────────
+        scan["step"] = "parsing_resume"
+        parser = ResumeParser()
+        resume_obj = await parser.parse(actual_resume)
+        resume_obj.file_url = resume_file_url or actual_resume
+        logger.info("Resume parsed", name=resume_obj.name, skills=len(resume_obj.skills))
 
-        # Build preferences — use DB values or sensible defaults
-        if pref:
-            preferences = UserPreferences(
-                target_roles=pref.target_roles or ["software engineer"],
-                locations=locations or pref.locations or ["Bangalore"],
-                experience_years=pref.experience_years or 0,
-                salary_min=pref.salary_min or 0,
-                remote_ok=pref.remote_ok if pref.remote_ok is not None else False,
-                auto_apply_threshold=pref.auto_apply_threshold or 75,
-            )
-        else:
-            preferences = UserPreferences(
-                target_roles=["software engineer", "python developer"],
-                locations=locations or ["Bangalore"],
-                experience_years=0,
-                salary_min=0,
-                remote_ok=False,
-                auto_apply_threshold=75,
-            )
-
-        # Resolve resume path
-        actual_resume_path = resume_path
-        if not actual_resume_path and resume_record and resume_record.file_url:
-            actual_resume_path = resume_record.file_url
-        if not actual_resume_path:
-            actual_resume_path = "Dhruv_Resume.pdf"  # fallback for dev
-
-        pipeline = JobApplicationPipeline(
-            apply_threshold=preferences.auto_apply_threshold,
-            max_applications=50,
-            user_id=user_id,
-            dry_run=False,
+        # ── Scrape ─────────────────────────────────────────────────
+        scan["step"] = "scraping_jobs"
+        scraper = JobScraper()
+        jobs = scraper.scrape_all(
+            roles=prefs["roles"],
+            locations=effective_locations,
+            num_per_search=10,
         )
+        logger.info("Scraping done", total=len(jobs))
 
-        # Hook into pipeline steps via scan state
-        scan["step"] = "parsing"
-        result = await pipeline.run(
-            resume_path=actual_resume_path,
-            preferences=preferences,
+        if not jobs:
+            scan["status"] = "completed"
+            scan["step"] = "done"
+            scan["result"] = {"jobs_scraped": 0, "scored": []}
+            return
+
+        # ── Pre-filter ──────────────────────────────────────────────
+        scan["step"] = "filtering_jobs"
+        pre_filter = PreFilter()
+        filter_results = await pre_filter.filter_all(
+            jobs, resume_obj.skills, pref_remote=prefs["remote_ok"]
         )
+        passed_filter = sorted(
+            [r for r in filter_results if r.passed], key=lambda r: r.score, reverse=True
+        )
+        logger.info("Pre-filter done", passed=len(passed_filter), total=len(filter_results))
 
+        if not passed_filter:
+            scan["status"] = "completed"
+            scan["step"] = "done"
+            scan["result"] = {"jobs_scraped": len(jobs), "passed_filter": 0, "scored": []}
+            return
+
+        # ── LLM Scoring ─────────────────────────────────────────────
+        scan["step"] = "scoring_jobs"
+        scorer = JobScorer(apply_threshold=threshold)
+        raw_scored = await scorer.score_batch(
+            resume=resume_obj,
+            jobs=[r.job for r in passed_filter],
+            max_jobs=15,
+        )
+        scored_results = [ScoredResult(job, match_score) for job, match_score in raw_scored]
+        passed_scored  = [r for r in scored_results if r.should_apply]
+        logger.info("LLM scoring done", scored=len(scored_results), above_threshold=len(passed_scored))
+
+        # ── Auto-apply ──────────────────────────────────────────────
+        apply_results: list[dict] = []
+        if AUTO_APPLY_ENABLED and passed_scored and not AUTO_APPLY_DRY_RUN:
+            scan["step"] = "auto_applying"
+            user_data   = build_user_data(resume_obj, prefs)
+            credentials = await fetch_platform_credentials(user_id)
+            apply_results = await run_auto_apply(
+                passed_scored, user_id, user_data,
+                resume_file_url, credentials, threshold,
+            )
+
+        # ── Stamp + save to DB ───────────────────────────────────────
+        scan["step"] = "saving_to_database"
+        _stamp_results(scored_results, {a["url"]: a for a in apply_results})
+        await save_scored_results_to_db(user_id, scored_results, threshold)
+
+        applied_count = len([a for a in apply_results if a["success"]])
         scan["status"] = "completed"
-        scan["step"] = "done"
-        scan["result"] = result
-
-        logger.info("Direct scan completed", scan_id=scan_id, user_id=user_id)
+        scan["step"]   = "done"
+        scan["result"] = {
+            "jobs_scraped":    len(jobs),
+            "passed_filter":   len(passed_filter),
+            "total_scored":    len(scored_results),
+            "above_threshold": len(passed_scored),
+            "auto_applied":    applied_count,
+            "jobs": [
+                {
+                    "title":    r.job.title,
+                    "company":  r.job.company,
+                    "location": r.job.location,
+                    "score":    r.score,
+                    "reason":   r.reason,
+                    "url":      r.job.apply_url,
+                    "status":   r.auto_apply_status,
+                }
+                for r in scored_results
+            ],
+        }
+        logger.info("Direct scan completed", scan_id=scan_id, user_id=user_id,
+                    scored=len(scored_results), applied=applied_count)
 
     except Exception as exc:
         scan["status"] = "failed"
-        scan["step"] = "error"
-        scan["error"] = str(exc)
+        scan["step"]   = "error"
+        scan["error"]  = str(exc)
         logger.error("Direct scan failed", scan_id=scan_id, error=str(exc))
+

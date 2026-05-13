@@ -61,8 +61,19 @@ class ScreeningQuestionsAgent(BaseAgent):
         super().__init__("screening_questions")
 
     def _call_llm_sync(self, prompt: str, max_tokens: int = 100) -> str:
-        """Sync wrapper used by Playwright sync handlers."""
-        return asyncio.run(self._call_llm(prompt=prompt, max_tokens=max_tokens))
+        """Sync wrapper used by Playwright sync handlers.
+
+        asyncio.run() fails when called inside an already-running event loop.
+        We run the coroutine in a fresh thread so the loop nesting issue is avoided.
+        """
+        import concurrent.futures
+
+        def _run() -> str:
+            return asyncio.run(self._call_llm(prompt=prompt, max_tokens=max_tokens))
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+            future = pool.submit(_run)
+            return future.result(timeout=60)
 
     # ─── Main Entry (Now Synchronous) ─────────────────────────
 

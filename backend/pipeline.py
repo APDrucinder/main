@@ -165,11 +165,11 @@ class JobApplicationPipeline:
                 max_jobs=15
             )
         except Exception as exc:
-                logger.error("Failed to parse resume", error=str(exc))
-                import traceback
-                traceback.print_exc()
-                results["errors"].append(f"Resume parsing failed: {str(exc)}")
-                return results
+            logger.error("LLM scoring failed", error=str(exc))
+            import traceback
+            traceback.print_exc()
+            results["errors"].append(f"LLM scoring failed: {str(exc)}")
+            return results
 
         results["jobs_scored"] = len(scored_results)
         results["scored"] = scored_results
