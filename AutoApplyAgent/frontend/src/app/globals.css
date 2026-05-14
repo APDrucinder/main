@@ -3,11 +3,14 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --font-sans: "Inter", system-ui, -apple-system, sans-serif;
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-anton), ui-sans-serif, system-ui, sans-serif;
+  --color-genrex-lime: #ccff00;
+  --color-genrex-lime-text: #bfff00;
   
   /* Deep Matte Black Theme (DeFi reference) */
-  --background: #0A0A0A;
-  --foreground: #F5F5F5;
+  --background: #0a0a0a;
+  --foreground: #fafafa;
   
   --card: rgba(255, 255, 255, 0.03);
   --card-foreground: #F5F5F5;
@@ -47,6 +50,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
   
   --color-ring: var(--ring);
   --color-input: var(--input);

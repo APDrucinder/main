@@ -1,12 +1,22 @@
 import type { Metadata } from "next";
-import { Inter } from "next/font/google";
+import { Anton, Geist, Geist_Mono } from "next/font/google";
 import { ClerkProvider } from "@clerk/nextjs";
 import "./globals.css";
 
-const inter = Inter({
-  variable: "--font-sans",
+const geistSans = Geist({
+  variable: "--font-geist-sans",
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700", "800"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
+
+const anton = Anton({
+  weight: "400",
+  subsets: ["latin"],
+  variable: "--font-anton",
 });
 
 export const metadata: Metadata = {
@@ -26,11 +36,9 @@ export default function RootLayout({
       signInFallbackRedirectUrl="/dashboard"
       signUpFallbackRedirectUrl="/onboarding"
     >
-      <html lang="en" className={`${inter.variable} h-full antialiased dark`}>
-        <body className="min-h-full flex bg-background text-foreground font-sans">
-          <div className="flex-1 w-full px-6 flex flex-col min-h-screen relative">
-            <main className="flex-1 pb-10 overflow-visible custom-scroll">{children}</main>
-          </div>
+      <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${anton.variable} h-full antialiased dark`}>
+        <body className="min-h-full flex flex-col bg-background text-foreground font-sans">
+          {children}
         </body>
       </html>
     </ClerkProvider>

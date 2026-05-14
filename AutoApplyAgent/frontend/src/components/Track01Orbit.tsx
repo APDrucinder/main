@@ -81,9 +81,7 @@ export function Track01Orbit({ className, activeIndex }: Track01OrbitProps) {
         
         <AnimatePresence mode="wait">
           <motion.a
-            href="http://localhost:3001"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="/dashboard"
             key={currentVisual.label}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}

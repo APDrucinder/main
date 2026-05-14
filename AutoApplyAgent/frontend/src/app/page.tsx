@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation';
+import { PhotoLanding } from "@/components/PhotoLanding";
 
 export default function Home() {
-  redirect('/dashboard');
+  return <PhotoLanding />;
 }
