@@ -15,7 +15,7 @@ import { Track01Orbit } from "./Track01Orbit";
 gsap.registerPlugin(ScrollTrigger);
 
 const screen1Body =
-  "Explore how Celerix Ai brings together job auto-apply, deep research, and scientific paper support—so you ship real work faster without sacrificing quality.";
+  "Explore how CelerixAi brings together job auto-apply, deep research, and scientific paper support—so you ship real work faster without sacrificing quality.";
 
 function CloverIcon({ className }: { className?: string }) {
   return (
@@ -39,7 +39,7 @@ function PartnerMark({ letter }: { letter: string }) {
 export function PhotoLanding() {
   const [isLoaded, setIsLoaded] = useState(false);
   const [currentAgentIndex, setCurrentAgentIndex] = useState(0);
-  
+
   const containerRef = useRef<HTMLDivElement>(null);
   const heroOrbRef = useRef<HTMLDivElement>(null);
   const h1Ref = useRef<HTMLHeadingElement>(null);
@@ -64,7 +64,7 @@ export function PhotoLanding() {
 
     // Intro elements timeline
     const tl = gsap.timeline({ delay: 0.1 });
-    
+
     tl.from(heroVisualRef.current, { opacity: 0, scale: 0.96, duration: 0.7, ease: "power2.out" })
       .from(h1Ref.current, { opacity: 0, y: 22, duration: 0.65, ease: "power2.out" }, "-=0.5")
       .from(pRef.current, { opacity: 0, y: 16, duration: 0.6, ease: "power2.out" }, "-=0.4")
@@ -141,7 +141,7 @@ export function PhotoLanding() {
         </div>
 
         <footer className="mt-auto flex flex-col gap-4 border-t border-neutral-800/80 pt-6 text-[9px] font-medium uppercase leading-snug tracking-[0.12em] text-neutral-500 md:flex-row md:items-end md:justify-between md:gap-6 md:pt-8">
-          <p className="max-w-md uppercase md:max-w-[55%]">Celerix Ai · All rights reserved</p>
+          <p className="max-w-md uppercase md:max-w-[55%]">CelerixAi · All rights reserved</p>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2 md:justify-end">
             <a href="#" className="transition hover:text-neutral-300">
               Terms &amp; conditions

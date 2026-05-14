@@ -53,9 +53,9 @@ export function LoadingScreen({ onComplete }: LoadingScreenProps) {
           phase === "exit"
             ? { scale: 0.3, opacity: 0 }
             : {
-                scale: [1, 1.15, 1],
-                opacity: [0.6, 1, 0.6],
-              }
+              scale: [1, 1.15, 1],
+              opacity: [0.6, 1, 0.6],
+            }
         }
         transition={
           phase === "exit"
@@ -70,11 +70,11 @@ export function LoadingScreen({ onComplete }: LoadingScreenProps) {
         animate={
           phase === "exit"
             ? {
-                scale: 0.32,
-                y: "calc(-50vh + 38px)",
-                x: "calc(-50vw + 90px)",
-                opacity: 0,
-              }
+              scale: 0.32,
+              y: "calc(-50vh + 38px)",
+              x: "calc(-50vw + 90px)",
+              opacity: 0,
+            }
             : { opacity: 1, scale: 1, x: 0, y: 0 }
         }
         transition={
@@ -85,7 +85,7 @@ export function LoadingScreen({ onComplete }: LoadingScreenProps) {
       >
         <Image
           src="/celerix-logo-transparent.png"
-          alt="Celerix Ai"
+          alt="CelerixAi"
           width={240}
           height={72}
           priority

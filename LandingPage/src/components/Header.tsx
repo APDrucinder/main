@@ -23,11 +23,7 @@ export function Header({ logoVisible = true }: HeaderProps) {
         transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
       >
         <Image src="/celerix-hex-mark.png" alt="Celerix Logo" width={22} height={22} className="object-contain invert" />
-        <span className="lowercase">celerix</span>
-        <span className="font-semibold">
-          <span className="uppercase">A</span>
-          <span className="lowercase">i</span>
-        </span>
+        <span>CelerixAi</span>
       </motion.div>
       <div className="pointer-events-auto flex justify-center justify-self-center">
         <CenterStar className="text-neutral-300" />

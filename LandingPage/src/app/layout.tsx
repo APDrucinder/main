@@ -19,9 +19,9 @@ const anton = Anton({
 });
 
 export const metadata: Metadata = {
-  title: "Celerix Ai — AI agents for work",
+  title: "CelerixAi — AI agents for work",
   description:
-    "Celerix Ai: job auto-apply, research, and scientific writing—presented in a focused, minimal experience.",
+    "CelerixAi: job auto-apply, research, and scientific writing—presented in a focused, minimal experience.",
 };
 
 export default function RootLayout({
