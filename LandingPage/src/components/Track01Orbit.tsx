@@ -46,23 +46,31 @@ export function Track01Orbit({ className, activeIndex }: Track01OrbitProps) {
       viewport={{ once: true, margin: "-60px" }}
       transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
     >
-      <div className="absolute inset-0 rounded-full border border-neutral-700/90 shadow-[0_0_0_1px_rgba(0,0,0,0.65)_inset]" />
-      <div className="absolute inset-[10px] rounded-full border border-neutral-700/70" />
-      <div className="absolute inset-[22px] rounded-full border border-dashed border-neutral-800/90" />
+      {/* Rotating orbit container */}
+      <motion.div 
+        className="absolute inset-0 z-0 pointer-events-none"
+        animate={{ rotate: -activeIndex * 90 }}
+        transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <div className="absolute inset-0 rounded-full border border-neutral-700/90 shadow-[0_0_0_1px_rgba(0,0,0,0.65)_inset]" />
+        <div className="absolute inset-[10px] rounded-full border border-neutral-700/70" />
+        <div className="absolute inset-[22px] rounded-full border border-dashed border-neutral-800/90" />
 
-      {orbitLabels.map(({ label, className: pos }, i) => (
-        <motion.span
-          key={label}
-          className={`${pillBase} absolute ${pos} transition-opacity duration-300`}
-          initial={{ opacity: 0, scale: 0.9 }}
-          whileInView={{ opacity: 1, scale: 1 }}
-          viewport={{ once: true }}
-          transition={{ delay: 0.07 * i, duration: 0.35 }}
-          style={{ opacity: (activeIndex === 0 && i === 0) || (activeIndex === 1 && i === 1) || (activeIndex === 2 && i === 2) || (activeIndex === 0 && i === 3) ? 1 : 0.4 }}
-        >
-          {label}
-        </motion.span>
-      ))}
+        {orbitLabels.map(({ label, className: pos }, i) => (
+          <div key={label} className={`absolute ${pos} z-10 pointer-events-auto`}>
+            <motion.div
+              className={`${pillBase} flex items-center justify-center whitespace-nowrap`}
+              animate={{ 
+                rotate: activeIndex * 90,
+                opacity: (activeIndex === 0 && i === 0) || (activeIndex === 1 && i === 1) || (activeIndex === 2 && i === 2) || (activeIndex === 0 && i === 3) ? 1 : 0.4
+              }}
+              transition={{ duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
+            >
+              {label}
+            </motion.div>
+          </div>
+        ))}
+      </motion.div>
 
       <motion.div
         className="relative z-10 flex h-[54%] w-[54%] items-center justify-center rounded-full transition-all duration-700"
@@ -81,9 +89,7 @@ export function Track01Orbit({ className, activeIndex }: Track01OrbitProps) {
         
         <AnimatePresence mode="wait">
           <motion.a
-            href="http://localhost:3001"
-            target="_blank"
-            rel="noopener noreferrer"
+            href="http://localhost:3001/dashboard"
             key={currentVisual.label}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}

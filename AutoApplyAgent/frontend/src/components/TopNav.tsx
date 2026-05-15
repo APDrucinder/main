@@ -23,7 +23,14 @@ export function TopNav() {
   const pathname = usePathname();
 
   if (pathname.startsWith("/login")) {
-    return null;
+    return (
+      <header className="absolute top-0 left-0 w-full h-24 flex items-center z-40 bg-transparent px-8 py-4">
+        <Link href="http://localhost:3000/" className="flex items-center gap-2 text-foreground hover:opacity-80 transition-opacity">
+          <img src="/celerix-hex-mark.png" alt="Celerix Logo" className="w-6 h-6 object-contain invert" />
+          <span className="font-bold text-xl tracking-wide uppercase text-white">CelerixAi</span>
+        </Link>
+      </header>
+    );
   }
 
   return (
@@ -31,10 +38,8 @@ export function TopNav() {
 
       {/* Left: Logo */}
       <div className="flex items-center gap-8">
-        <Link href="/dashboard" className="flex items-center gap-2 text-foreground hover:opacity-80 transition-opacity">
-          <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center">
-            <div className="w-4 h-4 border-[3px] border-black rounded-full border-b-transparent -rotate-45" />
-          </div>
+        <Link href="/" className="flex items-center gap-2 text-foreground hover:opacity-80 transition-opacity">
+          <img src="/celerix-hex-mark.png" alt="Celerix Logo" className="w-6 h-6 object-contain invert" />
           <span className="font-bold text-xl tracking-wide uppercase text-white">CelerixAi</span>
         </Link>
       </div>
