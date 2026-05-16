@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 from typing import List
+from urllib.parse import urlsplit, urlunsplit
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
@@ -26,11 +27,66 @@ except ImportError:  # pragma: no cover
 
 load_dotenv()
 
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    "http://localhost:3002",
+    "http://127.0.0.1:3002",
+]
+
+LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    deduped: list[str] = []
+    for value in values:
+        if value not in seen:
+            seen.add(value)
+            deduped.append(value)
+    return deduped
+
+
+def _is_loopback_origin(origin: str) -> bool:
+    try:
+        return urlsplit(origin).hostname in LOOPBACK_HOSTS
+    except ValueError:
+        return False
+
+
+def _expand_loopback_origins(origins: list[str]) -> list[str]:
+    expanded = list(origins)
+    for origin in origins:
+        try:
+            parts = urlsplit(origin)
+            port = parts.port
+        except ValueError:
+            continue
+
+        if parts.scheme not in {"http", "https"} or parts.hostname not in LOOPBACK_HOSTS:
+            continue
+
+        for host in LOOPBACK_HOSTS:
+            host_label = f"[{host}]" if ":" in host else host
+            netloc = f"{host_label}:{port}" if port else host_label
+            expanded.append(urlunsplit((parts.scheme, netloc, "", "", "")))
+
+    return _dedupe(expanded)
+
 
 def _parse_origins(value: str | None) -> List[str]:
-    if not value:
-        return ["http://localhost:3000"]
-    return [origin.strip() for origin in value.split(",") if origin.strip()]
+    origins = (
+        [origin.strip().rstrip("/") for origin in value.split(",") if origin.strip()]
+        if value
+        else []
+    )
+    if not origins:
+        origins = list(DEFAULT_CORS_ORIGINS)
+    elif any(_is_loopback_origin(origin) for origin in origins):
+        origins = [*DEFAULT_CORS_ORIGINS, *origins]
+    return _expand_loopback_origins(origins)
 
 
 def _init_sentry() -> None:

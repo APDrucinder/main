@@ -17,16 +17,19 @@ const agentVisuals = [
     label: "Agent 01",
     gradient: "conic-gradient(from 130deg, #f9c8ff, #c8e8ff, #fff6c8, #f0e8ff, #f9c8ff)",
     glow: "#bfff00",
+    href: "http://localhost:3001/dashboard",
   },
   {
     label: "Agent 02",
     gradient: "conic-gradient(from 130deg, #c8e8ff, #f9c8ff, #e8ffc8, #c8e8ff)",
     glow: "#00e5ff",
+    href: "#",
   },
   {
     label: "Agent 03",
     gradient: "conic-gradient(from 130deg, #fff6c8, #f9c8ff, #c8e8ff, #fff6c8)",
     glow: "#ff00e5",
+    href: "#",
   },
 ];
 
@@ -89,7 +92,7 @@ export function Track01Orbit({ className, activeIndex }: Track01OrbitProps) {
         
         <AnimatePresence mode="wait">
           <motion.a
-            href="http://localhost:3001/dashboard"
+            href={currentVisual.href}
             key={currentVisual.label}
             initial={{ opacity: 0, scale: 0.9 }}
             animate={{ opacity: 1, scale: 1 }}
