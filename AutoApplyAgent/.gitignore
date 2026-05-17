@@ -12,6 +12,9 @@ node_modules/
 .next/
 .env.local
 
+# Cookies (session secrets)
+backend/cookies/*.json
+
 # System
 .DS_Store
 *.log

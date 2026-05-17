@@ -219,7 +219,7 @@ class JobScraper(BaseAgent):
 
         from jobspy import scrape_jobs  # local import to keep module load fast
 
-        jobspy_sites = ["indeed", "linkedin"]
+        jobspy_sites = ["linkedin"]
 
         for role in roles:
             for loc in locations:
@@ -250,7 +250,7 @@ class JobScraper(BaseAgent):
                     logger.error("JobSpy scrape failed", error=str(e), role=role, location=search_location)
 
                 # --- PHASE 2: Naukri (Cached + Selenium) ---
-                naukri_results = self._scrape_naukri(role, clean_loc)
+                naukri_results = []
                 for job in naukri_results:
                     if job.apply_url not in seen_urls:
                         seen_urls.add(job.apply_url)

@@ -1,0 +1,2 @@
+# This file keeps the cookies directory in version control.
+# Actual cookie JSON files are gitignored (they contain session secrets).

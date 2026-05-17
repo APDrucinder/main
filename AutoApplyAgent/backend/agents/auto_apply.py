@@ -22,13 +22,14 @@ from agents.ats_handlers import (
     WorkdayHandler,
     ZohoHandler,
 )
+from cookie_manager import load_cookies
 from shared.logger import logger
 
 
 USER_AGENTS = [
-    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
-    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
 ]
 
 
@@ -83,11 +84,13 @@ class AutoApplyBot:
         debug: bool = False,
         dry_run: bool = False,
         navigation_timeout_ms: int = 45000,
+        browser_engine: str = "chromium",
     ):
         self.headless = headless
         self.debug = debug
         self.dry_run = dry_run
         self.navigation_timeout_ms = navigation_timeout_ms
+        self.browser_engine = browser_engine
 
     async def apply(
         self,
@@ -142,8 +145,30 @@ class AutoApplyBot:
             from playwright.sync_api import sync_playwright
 
             with sync_playwright() as playwright:
-                browser = playwright.chromium.launch(headless=self.headless)
+                browser = playwright.chromium.launch(channel="chrome", headless=self.headless)
                 context = browser.new_context(user_agent=random.choice(USER_AGENTS))
+
+                # Inject saved session cookies for this platform
+                cookie_status = load_cookies(platform, context)
+                if cookie_status.loaded:
+                    logger.info(
+                        "Session cookies injected",
+                        platform=platform,
+                        cookie_count=cookie_status.cookie_count,
+                    )
+                elif cookie_status.expired:
+                    logger.warning(
+                        "Session cookies expired — re-capture needed",
+                        platform=platform,
+                        message=cookie_status.message,
+                    )
+                else:
+                    logger.debug(
+                        "No saved cookies for platform",
+                        platform=platform,
+                        message=cookie_status.message,
+                    )
+
                 page = context.new_page()
                 page.goto(final_url, wait_until="domcontentloaded", timeout=self.navigation_timeout_ms)
 
