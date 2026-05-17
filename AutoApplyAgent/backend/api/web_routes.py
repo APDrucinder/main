@@ -40,7 +40,7 @@ class SettingsPayload(BaseModel):
     experience_years: int = Field(default=0, ge=0)
     salary_min: int = Field(default=0, ge=0)
     remote_ok: bool = False
-    auto_apply_threshold: int = Field(default=75, ge=0, le=100)
+    auto_apply_threshold: int = Field(default=75, ge=75, le=100)
 
 
 class OnboardingPayload(BaseModel):
@@ -50,7 +50,7 @@ class OnboardingPayload(BaseModel):
     experience_years: int = Field(default=0, ge=0)
     salary_min: int = Field(default=0, ge=0)
     remote_ok: bool = False
-    auto_apply_threshold: int = Field(default=75, ge=0, le=100)
+    auto_apply_threshold: int = Field(default=75, ge=75, le=100)
 
 
 async def _fetch_or_create_user(db: AsyncSession, email: str) -> User:

@@ -161,10 +161,16 @@ def _capture_single_platform(platform: str, login_url: str, slow_mo: int) -> boo
             return False
 
         # Build metadata-enriched cookie payload
+        user_agent_str = (
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) "
+            "Chrome/125.0.0.0 Safari/537.36"
+        )
         payload = {
             "platform": platform,
             "captured_at": _now_iso(),
             "cookie_count": len(cookies),
+            "user_agent": user_agent_str,
             "cookies": cookies,
         }
 
@@ -197,6 +203,7 @@ class CookieStatus:
         self.captured_at = captured_at
         self.expired = expired
         self.message = message
+        self.user_agent = None
 
     def __repr__(self) -> str:
         status = "OK" if self.loaded else ("EXPIRED" if self.expired else "MISSING")
@@ -293,7 +300,7 @@ def load_cookies(platform: str, context: BrowserContext) -> CookieStatus:
     if expired_count:
         msg_parts.append(f"({expired_count} expired cookies skipped)")
 
-    return CookieStatus(
+    status_obj = CookieStatus(
         loaded=True,
         platform=platform,
         cookie_count=len(valid_cookies),
@@ -301,9 +308,22 @@ def load_cookies(platform: str, context: BrowserContext) -> CookieStatus:
         expired=False,
         message=" ".join(msg_parts),
     )
+    status_obj.user_agent = payload.get("user_agent")
+    return status_obj
 
 
 # ─── Utilities ────────────────────────────────────────────────────────────────
+
+def get_cookie_user_agent(platform: str) -> Optional[str]:
+    """Retrieve the User-Agent string used during cookie capture for a platform."""
+    cookie_file = _cookie_path(platform)
+    if not cookie_file.exists():
+        return None
+    try:
+        payload = json.loads(cookie_file.read_text())
+        return payload.get("user_agent")
+    except Exception:
+        return None
 
 def list_saved_cookies() -> Dict[str, Dict[str, Any]]:
     """

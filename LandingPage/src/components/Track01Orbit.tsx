@@ -12,12 +12,15 @@ const orbitLabels = [
   { label: "Workflow", className: "left-0 top-1/2 -translate-x-[42%] -translate-y-1/2" },
 ] as const;
 
+const agentOneHref =
+  process.env.NEXT_PUBLIC_AGENT_ONE_URL ?? "http://localhost:3001/dashboard";
+
 const agentVisuals = [
   {
     label: "Agent 01",
     gradient: "conic-gradient(from 130deg, #f9c8ff, #c8e8ff, #fff6c8, #f0e8ff, #f9c8ff)",
     glow: "#bfff00",
-    href: "http://localhost:3001/dashboard",
+    href: agentOneHref,
   },
   {
     label: "Agent 02",

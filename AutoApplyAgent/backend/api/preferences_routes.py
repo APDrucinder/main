@@ -19,7 +19,7 @@ class PreferencesInput(BaseModel):
     experience_years: int = Field(ge=0)
     salary_min: int = Field(default=0, ge=0)
     remote_ok: bool = False
-    auto_apply_threshold: int = Field(default=75, ge=0, le=100)
+    auto_apply_threshold: int = Field(default=75, ge=75, le=100)
 
 
 @router.post("/{user_id}")

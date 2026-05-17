@@ -330,7 +330,7 @@ export default function DashboardPage() {
                     <Play className="w-8 h-8 ml-1" />
                   </button>
                   <p className="mt-6 font-medium text-white/80">Start new scan</p>
-                  <p className="text-xs text-white/50 mt-2 text-center max-w-[200px]">Agent will search, filter, and auto-apply based on your settings.</p>
+                  <p className="text-xs text-white/50 mt-2 text-center max-w-[240px]">Agent will search, filter, and auto-apply within conservative caps. It pauses if a platform session is invalid.</p>
                 </div>
               ) : (
                 <div className="py-4">

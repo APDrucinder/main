@@ -265,13 +265,16 @@ export default function OnboardingPage() {
               </div>
               <input
                 type="range"
-                min="50" max="90"
+                min="75" max="95"
                 value={threshold}
                 onChange={(e) => setThreshold(parseInt(e.target.value))}
                 className="w-full"
               />
               <p className="text-[10px] text-white/40 mt-3 text-center">
                 Agent will only auto-apply if the match score is {threshold}% or higher.
+              </p>
+              <p className="text-[10px] text-white/40 mt-2 text-center">
+                Live LinkedIn auto-apply requires a valid server-side LinkedIn session on the deployment machine.
               </p>
             </div>
 
@@ -290,7 +293,7 @@ export default function OnboardingPage() {
             <ul className="text-xs text-white/50 space-y-3">
               <li className="flex gap-2"><span className="text-white">•</span> Your resume is parsed by our LLM to extract key skills and experiences.</li>
               <li className="flex gap-2"><span className="text-white">•</span> The Agent continuously scans job boards for matches.</li>
-              <li className="flex gap-2"><span className="text-white">•</span> Applications are sent automatically if they meet your threshold.</li>
+              <li className="flex gap-2"><span className="text-white">•</span> Applications are sent only when they meet your threshold and the platform session is valid.</li>
             </ul>
           </div>
 

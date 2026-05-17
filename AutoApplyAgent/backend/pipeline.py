@@ -18,6 +18,8 @@ from shared.logger import logger
 ROLES = ["software engineer", "python developer", "backend developer"]
 NUM_JOBS = 10
 RESUME_PATH = "Dhruv_Resume.pdf"
+AUTO_APPLY_MIN_THRESHOLD = 75
+AUTO_APPLY_MAX_CONSECUTIVE_FAILURES = 2
 
 
 class UserPreferences(BaseModel):
@@ -33,12 +35,12 @@ class JobApplicationPipeline:
 
     def __init__(
         self,
-        apply_threshold: int = 50,
-        max_applications: int = 50,
+        apply_threshold: int = AUTO_APPLY_MIN_THRESHOLD,
+        max_applications: int = 3,
         user_id: str = "default",
         dry_run: bool = False
     ):
-        self.apply_threshold = apply_threshold
+        self.apply_threshold = max(apply_threshold, AUTO_APPLY_MIN_THRESHOLD)
         self.max_applications = max_applications
         self.user_id = user_id
         self.dry_run = dry_run
@@ -249,6 +251,7 @@ class JobApplicationPipeline:
         }
 
         apply_results = []
+        consecutive_failures = 0
 
         try:
             applier = AutoApplyBot(
@@ -275,6 +278,7 @@ class JobApplicationPipeline:
                 except Exception as exc:
                     logger.error("Apply failed", title=job.title, error=str(exc))
                     success = False
+                    result = None
 
                 apply_results.append({
                     "job_title": job.title,
@@ -283,7 +287,31 @@ class JobApplicationPipeline:
                     "apply_url": job.apply_url,
                     "applied": success,
                     "source": job.source,
+                    "status": result.status.value if result else "unknown_failure",
+                    "reason": result.reason if result and not success else None,
                 })
+
+                if success:
+                    consecutive_failures = 0
+                    continue
+
+                if result and result.status.value in {"login_failed", "no_credentials"}:
+                    logger.warning(
+                        "Stopping auto-apply run because platform session is invalid",
+                        platform=result.platform,
+                        status=result.status.value,
+                        reason=result.reason,
+                    )
+                    break
+
+                consecutive_failures += 1
+                if consecutive_failures >= AUTO_APPLY_MAX_CONSECUTIVE_FAILURES:
+                    logger.warning(
+                        "Stopping auto-apply run after consecutive failures",
+                        failures=consecutive_failures,
+                        max_failures=AUTO_APPLY_MAX_CONSECUTIVE_FAILURES,
+                    )
+                    break
 
         except Exception as exc:
             logger.error("Playwright session failed", error=str(exc))

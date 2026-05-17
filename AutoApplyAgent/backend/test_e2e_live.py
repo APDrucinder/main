@@ -7,7 +7,7 @@ with configurable threshold and dry_run mode.
 Usage:
     python test_e2e_live.py                   # dry run (default)
     python test_e2e_live.py --live            # REAL applications
-    python test_e2e_live.py --threshold 50    # custom threshold
+    python test_e2e_live.py --threshold 85    # custom threshold
 """
 
 from __future__ import annotations
@@ -43,8 +43,8 @@ DEFAULT_ROLES = [
 
 DEFAULT_LOCATIONS = ["Bangalore", "Mumbai"]
 
-DEFAULT_THRESHOLD = 45
-DEFAULT_MAX_APPS = 10
+DEFAULT_THRESHOLD = 75
+DEFAULT_MAX_APPS = 3
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -85,6 +85,7 @@ async def run_e2e_test(
             print(f"      {plat:<15}  {info['cookie_count']:>3} cookies  {status}")
     else:
         print("      ⚠  No cookies saved! Run: python cookie_manager.py linkedin naukri")
+    print("      LinkedIn live auto-apply requires cookies captured on this deployment machine.")
     print()
 
     # ── Check resume ───────────────────────────────────────────

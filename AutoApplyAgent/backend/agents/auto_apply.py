@@ -22,7 +22,7 @@ from agents.ats_handlers import (
     WorkdayHandler,
     ZohoHandler,
 )
-from cookie_manager import load_cookies
+from cookie_manager import load_cookies, get_cookie_user_agent
 from shared.logger import logger
 
 
@@ -146,8 +146,19 @@ class AutoApplyBot:
             from playwright.sync_api import sync_playwright
 
             with sync_playwright() as playwright:
-                browser = playwright.chromium.launch(channel="chrome", headless=self.headless)
-                context = browser.new_context(user_agent=random.choice(USER_AGENTS))
+                platform_ua = get_cookie_user_agent(platform) or random.choice(USER_AGENTS)
+                browser = playwright.chromium.launch(
+                    channel="chrome",
+                    headless=self.headless,
+                    args=[
+                        "--disable-blink-features=AutomationControlled",
+                        "--start-maximized",
+                    ]
+                )
+                context = browser.new_context(
+                    user_agent=platform_ua,
+                    viewport={"width": 1280, "height": 900}
+                )
 
                 # Inject saved session cookies for this platform
                 cookie_status = load_cookies(platform, context)
@@ -157,11 +168,20 @@ class AutoApplyBot:
                         platform=platform,
                         cookie_count=cookie_status.cookie_count,
                     )
-                elif cookie_status.expired:
+                elif platform == "linkedin":
                     logger.warning(
-                        "Session cookies expired — re-capture needed",
+                        "LinkedIn session unavailable — re-capture needed on this machine",
                         platform=platform,
                         message=cookie_status.message,
+                    )
+                    return ApplyResult(
+                        status=ApplyStatus.LOGIN_FAILED,
+                        platform=platform,
+                        reason=(
+                            cookie_status.message
+                            or "LinkedIn session cookies are missing or expired. "
+                            "Re-capture LinkedIn cookies on the deployment machine before live auto-apply."
+                        ),
                     )
                 else:
                     logger.debug(
@@ -169,12 +189,6 @@ class AutoApplyBot:
                         platform=platform,
                         message=cookie_status.message,
                     )
-                    if platform == "linkedin":
-                        return ApplyResult(
-                            status=ApplyStatus.LOGIN_FAILED,
-                            platform=platform,
-                            reason=cookie_status.message or "LinkedIn session cookies are missing.",
-                        )
 
                 page = context.new_page()
                 page.goto(final_url, wait_until="domcontentloaded", timeout=self.navigation_timeout_ms)
@@ -183,7 +197,10 @@ class AutoApplyBot:
                     return ApplyResult(
                         status=ApplyStatus.LOGIN_FAILED,
                         platform=platform,
-                        reason=f"{platform} opened a sign-in page. Reconnect this platform before auto-apply.",
+                        reason=(
+                            f"{platform} opened a sign-in page. Reconnect this platform "
+                            "on the deployment machine before live auto-apply."
+                        ),
                     )
 
                 handler = handler_class(page=page, user_data=enriched_user_data, dry_run=self.dry_run)

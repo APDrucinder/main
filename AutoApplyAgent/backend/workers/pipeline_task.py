@@ -24,7 +24,9 @@ import os
 AUTO_APPLY_ENABLED: bool = os.getenv("AUTO_APPLY_ENABLED", "true").lower() == "true"
 AUTO_APPLY_DRY_RUN: bool = os.getenv("AUTO_APPLY_DRY_RUN", "false").lower() == "true"
 AUTO_APPLY_HEADLESS: bool = os.getenv("AUTO_APPLY_HEADLESS", "true").lower() == "true"
-AUTO_APPLY_MAX_PER_RUN: int = int(os.getenv("AUTO_APPLY_MAX_PER_RUN", "5"))
+AUTO_APPLY_MAX_PER_RUN: int = int(os.getenv("AUTO_APPLY_MAX_PER_RUN", "3"))
+AUTO_APPLY_MAX_CONSECUTIVE_FAILURES: int = int(os.getenv("AUTO_APPLY_MAX_CONSECUTIVE_FAILURES", "2"))
+AUTO_APPLY_MIN_THRESHOLD: int = int(os.getenv("AUTO_APPLY_MIN_THRESHOLD", "75"))
 
 
 def _parse_user_uuid(user_id: str) -> uuid.UUID:
@@ -62,7 +64,7 @@ async def fetch_user_preferences(user_id: str) -> dict:
                     "roles":            prefs.target_roles or DEFAULT_ROLES,
                     "locations":        prefs.locations or DEFAULT_LOCATIONS,
                     "remote_ok":        prefs.remote_ok,
-                    "threshold":        prefs.auto_apply_threshold,
+                    "threshold":        max(prefs.auto_apply_threshold, AUTO_APPLY_MIN_THRESHOLD),
                     "experience_years": prefs.experience_years or 0,
                 }
             logger.warning("No preferences found, using defaults", user_id=user_id)
@@ -73,7 +75,7 @@ async def fetch_user_preferences(user_id: str) -> dict:
             "roles":            DEFAULT_ROLES,
             "locations":        DEFAULT_LOCATIONS,
             "remote_ok":        False,
-            "threshold":        75,
+            "threshold":        AUTO_APPLY_MIN_THRESHOLD,
             "experience_years": 0,
         }
 
@@ -294,6 +296,7 @@ async def run_auto_apply(
 
     bot           = AutoApplyBot(headless=AUTO_APPLY_HEADLESS, debug=False)
     apply_results = []
+    consecutive_failures = 0
 
     for r in passed_results[:AUTO_APPLY_MAX_PER_RUN]:
         if r.score < threshold:
@@ -337,6 +340,28 @@ async def run_auto_apply(
             "status":   result.status.value,
             "reason":   result.reason if not success else None,
         })
+
+        if success:
+            consecutive_failures = 0
+            continue
+
+        if result.status in {ApplyStatus.LOGIN_FAILED, ApplyStatus.NO_CREDENTIALS}:
+            logger.warning(
+                "Stopping auto-apply run because platform session is invalid",
+                platform=result.platform,
+                status=result.status.value,
+                reason=result.reason,
+            )
+            break
+
+        consecutive_failures += 1
+        if consecutive_failures >= AUTO_APPLY_MAX_CONSECUTIVE_FAILURES:
+            logger.warning(
+                "Stopping auto-apply run after consecutive failures",
+                failures=consecutive_failures,
+                max_failures=AUTO_APPLY_MAX_CONSECUTIVE_FAILURES,
+            )
+            break
 
     return apply_results
 

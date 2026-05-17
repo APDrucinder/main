@@ -90,17 +90,19 @@ async def apply_with_retry(
                 "external_apply",
                 "captcha",
                 "login_required",
+                "login_failed",
                 "unsupported_ats",
                 "unsupported_platform",
                 "no_credentials",
             }
 
-            if result.get("reason") in non_retryable:
+            result_code = result.get("status") or result.get("reason")
+            if result_code in non_retryable:
                 if trace:
                     trace.update(
                         output={
                             "success": False,
-                            "reason": result.get("reason"),
+                            "reason": result_code,
                             "retried": False,
                         }
                     )
