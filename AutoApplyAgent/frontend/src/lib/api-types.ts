@@ -61,3 +61,36 @@ export interface OnboardingPayload {
   remoteOk: boolean;
   autoApplyThreshold: number;
 }
+
+export interface ScanStartResponse {
+  scan_id: string;
+  status: "running";
+  message: string;
+}
+
+export interface ScanJobResult {
+  title: string;
+  company: string;
+  location: string | null;
+  score: number;
+  reason: string;
+  url: string;
+  status: string | null;
+}
+
+export interface ScanRunResult {
+  jobs_scraped: number;
+  passed_filter?: number;
+  total_scored?: number;
+  above_threshold?: number;
+  auto_applied?: number;
+  jobs?: ScanJobResult[];
+}
+
+export interface ScanStatusResponse {
+  scan_id: string;
+  status: "running" | "completed" | "failed";
+  step: string;
+  result: ScanRunResult | null;
+  error: string | null;
+}

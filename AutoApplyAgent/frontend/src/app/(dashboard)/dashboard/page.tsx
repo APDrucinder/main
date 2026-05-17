@@ -18,16 +18,24 @@ import { useState, useEffect } from "react";
 import { useUser } from "@clerk/nextjs";
 import { isClerkHandshakeSearch } from "@/lib/clerk-oauth-return";
 import { ApiError } from "@/lib/api-client";
-import { getDashboard } from "@/lib/api";
+import { getAgentScanStatus, getDashboard, startAgentScan } from "@/lib/api";
 import type { DashboardJob, DashboardResponse } from "@/lib/api-types";
 
 const scanSteps = [
-  "Parsing resume...",
-  "Scraping jobs...",
-  "Filtering...",
-  "Auto applying...",
-  "Done"
+  { key: "loading_preferences", label: "Loading profile..." },
+  { key: "parsing_resume", label: "Parsing resume..." },
+  { key: "scraping_jobs", label: "Scraping jobs..." },
+  { key: "filtering_jobs", label: "Filtering..." },
+  { key: "scoring_jobs", label: "Scoring matches..." },
+  { key: "auto_applying", label: "Applying safely..." },
+  { key: "saving_to_database", label: "Saving results..." },
+  { key: "done", label: "Done" },
 ];
+
+function scanStepIndex(step: string) {
+  const index = scanSteps.findIndex((item) => item.key === step);
+  return index === -1 ? 0 : index;
+}
 
 function JobCard({ job }: { job: DashboardJob }) {
   const isTopMatch = job.match >= 90 || job.isTop;
@@ -97,23 +105,70 @@ export default function DashboardPage() {
 
   const [isScanning, setIsScanning] = useState(false);
   const [scanStep, setScanStep] = useState(0);
+  const [scanId, setScanId] = useState<string | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+  const [scanSummary, setScanSummary] = useState<string | null>(null);
   const [dashboardData, setDashboardData] = useState<DashboardResponse | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (isScanning && scanStep < scanSteps.length - 1) {
-      const timer = setTimeout(() => {
-        setScanStep(prev => prev + 1);
-      }, 2000);
-      return () => clearTimeout(timer);
-    } else if (scanStep === scanSteps.length - 1) {
-      setTimeout(() => setIsScanning(false), 2000);
+    if (!isScanning || !scanId) {
+      return;
     }
-  }, [isScanning, scanStep]);
 
-  const startScan = () => {
+    let cancelled = false;
+    const timer = window.setInterval(async () => {
+      try {
+        const status = await getAgentScanStatus(scanId);
+        if (cancelled) return;
+
+        setScanStep(scanStepIndex(status.step));
+
+        if (status.status === "completed") {
+          window.clearInterval(timer);
+          setIsScanning(false);
+          setScanId(null);
+          setScanSummary(
+            `${status.result?.total_scored ?? 0} scored, ${status.result?.above_threshold ?? 0} above threshold, ${status.result?.auto_applied ?? 0} auto-applied.`
+          );
+          const refreshed = await getDashboard();
+          if (!cancelled) setDashboardData(refreshed);
+        }
+
+        if (status.status === "failed") {
+          window.clearInterval(timer);
+          setIsScanning(false);
+          setScanId(null);
+          setScanError(status.error || "Agent scan failed.");
+        }
+      } catch (error) {
+        if (cancelled) return;
+        window.clearInterval(timer);
+        setIsScanning(false);
+        setScanId(null);
+        setScanError(error instanceof ApiError ? error.message : "Unable to read scan status.");
+      }
+    }, 2500);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [isScanning, scanId]);
+
+  const startScan = async () => {
     setIsScanning(true);
     setScanStep(0);
+    setScanError(null);
+    setScanSummary(null);
+
+    try {
+      const scan = await startAgentScan();
+      setScanId(scan.scan_id);
+    } catch (error) {
+      setIsScanning(false);
+      setScanError(error instanceof ApiError ? error.message : "Unable to start agent scan.");
+    }
   };
 
   useEffect(() => {
@@ -191,6 +246,16 @@ export default function DashboardPage() {
           {loadError}
         </p>
       ) : null}
+      {scanError ? (
+        <p className="mb-4 rounded-lg border border-red-400/20 bg-red-500/10 px-4 py-2 text-xs text-red-200">
+          {scanError}
+        </p>
+      ) : null}
+      {scanSummary ? (
+        <p className="mb-4 rounded-lg border border-white/10 bg-white/[0.04] px-4 py-2 text-xs text-white/70">
+          {scanSummary}
+        </p>
+      ) : null}
 
       {/* ═══ HERO SECTION ═══ */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 relative min-h-[480px]">
@@ -259,6 +324,7 @@ export default function DashboardPage() {
               <div className="flex flex-col items-center justify-center py-8">
                   <button
                     onClick={startScan}
+                    disabled={isScanning}
                     className="w-24 h-24 rounded-full bg-[#FFFFFF] text-black flex items-center justify-center hover:scale-105 transition-transform shadow-[0_0_30px_rgba(255,255,255,0.12)]"
                   >
                     <Play className="w-8 h-8 ml-1" />
@@ -273,7 +339,7 @@ export default function DashboardPage() {
                       const isActive = idx === scanStep;
                       const isPast = idx < scanStep;
                       return (
-                        <div key={step} className="flex items-center gap-4">
+                        <div key={step.key} className="flex items-center gap-4">
                           <div className={`w-8 h-8 rounded-full flex items-center justify-center border transition-colors ${isPast ? 'bg-white border-white text-black' :
                             isActive ? 'bg-white/10 border-white/60 text-white' : 'bg-transparent border-white/20 text-white/30'
                             }`}>
@@ -281,7 +347,7 @@ export default function DashboardPage() {
                           </div>
                           <span className={`text-sm font-medium transition-colors ${isPast ? 'text-white' : isActive ? 'text-white' : 'text-white/30'
                             }`}>
-                            {step}
+                            {step.label}
                           </span>
                         </div>
                       )

@@ -23,6 +23,8 @@ DEFAULT_NUM_JOBS  = 10
 import os
 AUTO_APPLY_ENABLED: bool = os.getenv("AUTO_APPLY_ENABLED", "true").lower() == "true"
 AUTO_APPLY_DRY_RUN: bool = os.getenv("AUTO_APPLY_DRY_RUN", "false").lower() == "true"
+AUTO_APPLY_HEADLESS: bool = os.getenv("AUTO_APPLY_HEADLESS", "true").lower() == "true"
+AUTO_APPLY_MAX_PER_RUN: int = int(os.getenv("AUTO_APPLY_MAX_PER_RUN", "5"))
 
 
 def _parse_user_uuid(user_id: str) -> uuid.UUID:
@@ -290,10 +292,10 @@ async def run_auto_apply(
         )
         return []
 
-    bot           = AutoApplyBot(headless=True, debug=False)
+    bot           = AutoApplyBot(headless=AUTO_APPLY_HEADLESS, debug=False)
     apply_results = []
 
-    for r in passed_results:
+    for r in passed_results[:AUTO_APPLY_MAX_PER_RUN]:
         if r.score < threshold:
             logger.info(
                 "Skipping — below threshold",

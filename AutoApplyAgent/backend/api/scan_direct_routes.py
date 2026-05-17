@@ -105,7 +105,9 @@ async def _execute_scan(
         effective_locations = locations or prefs["locations"]
         threshold = prefs["threshold"]
         resume_file_url = await fetch_resume_file_url(user_id)
-        actual_resume = resume_path or resume_file_url or "Dhruv_Resume.pdf"
+        actual_resume = resume_path or resume_file_url
+        if not actual_resume:
+            raise RuntimeError("Upload a resume before starting the agent.")
 
         # ── Parse resume ──────────────────────────────────────────────
         scan["step"] = "parsing_resume"
@@ -167,7 +169,7 @@ async def _execute_scan(
             credentials = await fetch_platform_credentials(user_id)
             apply_results = await run_auto_apply(
                 passed_scored, user_id, user_data,
-                resume_file_url, credentials, threshold,
+                actual_resume, credentials, threshold,
             )
 
         # ── Stamp + save to DB ───────────────────────────────────────
@@ -205,4 +207,3 @@ async def _execute_scan(
         scan["step"]   = "error"
         scan["error"]  = str(exc)
         logger.error("Direct scan failed", scan_id=scan_id, error=str(exc))
-

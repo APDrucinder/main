@@ -7,7 +7,7 @@ import tempfile
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlunparse
 
 import requests
 from pydantic import BaseModel, ConfigDict
@@ -116,6 +116,7 @@ class AutoApplyBot:
         credentials: PlatformCredentials | None,
     ) -> ApplyResult:
         final_url = self._resolve_external_redirects(job_url)
+        final_url = self._normalize_platform_url(final_url)
         platform, handler_class = self._resolve_handler(final_url)
 
         if not handler_class:
@@ -168,9 +169,22 @@ class AutoApplyBot:
                         platform=platform,
                         message=cookie_status.message,
                     )
+                    if platform == "linkedin":
+                        return ApplyResult(
+                            status=ApplyStatus.LOGIN_FAILED,
+                            platform=platform,
+                            reason=cookie_status.message or "LinkedIn session cookies are missing.",
+                        )
 
                 page = context.new_page()
                 page.goto(final_url, wait_until="domcontentloaded", timeout=self.navigation_timeout_ms)
+
+                if self._login_required_visible(page, platform):
+                    return ApplyResult(
+                        status=ApplyStatus.LOGIN_FAILED,
+                        platform=platform,
+                        reason=f"{platform} opened a sign-in page. Reconnect this platform before auto-apply.",
+                    )
 
                 handler = handler_class(page=page, user_data=enriched_user_data, dry_run=self.dry_run)
                 success = handler.execute_apply_flow()
@@ -224,12 +238,36 @@ class AutoApplyBot:
             logger.warning("Redirect resolution failed", url=url, error=str(exc))
         return url
 
+    def _normalize_platform_url(self, url: str) -> str:
+        parsed = urlparse(url)
+        if parsed.hostname and parsed.hostname.endswith("linkedin.com") and parsed.hostname != "www.linkedin.com":
+            return urlunparse(parsed._replace(netloc="www.linkedin.com"))
+        return url
+
     def _resolve_handler(self, url: str):
         url_lower = url.lower()
         for signature, handler in self._ROUTING_TABLE.items():
             if signature in url_lower:
                 return handler
         return "unknown", None
+
+    def _login_required_visible(self, page, platform: str) -> bool:
+        if platform != "linkedin":
+            return False
+        try:
+            page_text = page.locator("body").inner_text(timeout=5000).lower()
+        except Exception:
+            page_text = page.content().lower()
+
+        signed_out_markers = (
+            "sign in to see",
+            "sign in with email",
+            "continue with google",
+            "new to linkedin?",
+        )
+        has_signed_out_copy = any(marker in page_text for marker in signed_out_markers)
+        has_signed_in_nav = "my network" in page_text and "messaging" in page_text and "notifications" in page_text
+        return has_signed_out_copy and not has_signed_in_nav
 
     def _has_platform_credentials(
         self,

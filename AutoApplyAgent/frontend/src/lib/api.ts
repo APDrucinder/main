@@ -5,6 +5,8 @@ import type {
   DashboardResponse,
   DashboardJob,
   OnboardingPayload,
+  ScanStartResponse,
+  ScanStatusResponse,
   SettingsPayload,
   User,
 } from "@/lib/api-types";
@@ -135,6 +137,17 @@ export async function getDashboard() {
     activeFeedsDelta: 0,
     jobs: response.recent_applications.map(toDashboardJob),
   } satisfies DashboardResponse;
+}
+
+export async function startAgentScan() {
+  return apiRequest<ScanStartResponse>("/scan/run", {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
+export async function getAgentScanStatus(scanId: string) {
+  return apiRequest<ScanStatusResponse>(`/scan/run/${scanId}/status`);
 }
 
 export async function getApplications() {

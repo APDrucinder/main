@@ -13,9 +13,10 @@ from sqlalchemy.orm import DeclarativeBase
 ROOT_ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 BACKEND_ENV_PATH = Path(__file__).resolve().parents[1] / ".env"
 
-# Load root .env first (preferred), then backend/.env for backward compatibility.
+# Load backend/.env last with override so repo-root placeholders cannot shadow
+# the real backend runtime configuration.
 load_dotenv(dotenv_path=ROOT_ENV_PATH, override=False)
-load_dotenv(dotenv_path=BACKEND_ENV_PATH, override=False)
+load_dotenv(dotenv_path=BACKEND_ENV_PATH, override=True)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
