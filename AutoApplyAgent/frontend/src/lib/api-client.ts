@@ -116,6 +116,9 @@ export async function apiRequest<T>(
     );
   }
 
-  const payload = (await response.json()) as SuccessEnvelope<T>;
-  return payload.data;
+  const payload = (await response.json()) as SuccessEnvelope<T> | T;
+  if (payload && typeof payload === "object" && "data" in payload) {
+    return (payload as SuccessEnvelope<T>).data;
+  }
+  return payload as T;
 }

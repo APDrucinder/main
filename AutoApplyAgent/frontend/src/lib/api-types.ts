@@ -94,3 +94,17 @@ export interface ScanStatusResponse {
   result: ScanRunResult | null;
   error: string | null;
 }
+
+export interface PlatformSession {
+  platform: string;
+  state: "missing" | "expired" | "available";
+  required_for_live: boolean;
+  cookie_count: number;
+  captured_at: string | null;
+  message: string;
+}
+
+export interface PlatformSessionsResponse {
+  checked_at: string;
+  sessions: PlatformSession[];
+}

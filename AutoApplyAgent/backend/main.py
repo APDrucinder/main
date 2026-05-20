@@ -13,6 +13,7 @@ from sqlalchemy.exc import SQLAlchemyError, TimeoutError as SQLAlchemyTimeoutErr
 
 from api.application_routes import router as application_router
 from api.pipeline_routes import router as pipeline_router
+from api.platform_routes import router as platform_router
 from api.preferences_routes import router as preferences_router
 from api.resume_routes import router as resume_router
 from api.scan_routes import router as scan_router
@@ -198,6 +199,7 @@ async def unhandled_exception_handler(_: Request, exc: Exception):
 
 
 app.include_router(web_router)
+app.include_router(platform_router)
 app.include_router(resume_router)
 app.include_router(preferences_router)
 app.include_router(scan_router)

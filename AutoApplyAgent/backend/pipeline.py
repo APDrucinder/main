@@ -274,7 +274,7 @@ class JobApplicationPipeline:
                         resume_url=resume_path,
                         credentials=None
                     )
-                    success = (result.status == "applied")
+                    success = result.status.value == "applied"
                 except Exception as exc:
                     logger.error("Apply failed", title=job.title, error=str(exc))
                     success = False

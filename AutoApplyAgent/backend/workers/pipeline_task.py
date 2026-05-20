@@ -285,6 +285,7 @@ async def run_auto_apply(
     Returns list of outcome dicts — never raises.
     """
     from agents.auto_apply import AutoApplyBot, ApplyStatus
+    from agents.tier_limits import check_tier_limit
 
     if not resume_file_url:
         logger.error(
@@ -294,11 +295,27 @@ async def run_auto_apply(
         )
         return []
 
+    async with AsyncSessionLocal() as session:
+        limit_status = await check_tier_limit(user_id, session)
+
+    if not limit_status["can_apply"]:
+        logger.warning(
+            "Skipping auto-apply because daily tier limit is reached",
+            user_id=user_id,
+            tier=limit_status["tier"],
+            limit=limit_status["limit"],
+        )
+        return []
+
+    remaining = limit_status["remaining"]
+    tier_remaining = AUTO_APPLY_MAX_PER_RUN if remaining == "unlimited" else int(remaining)
+    max_this_run = max(0, min(AUTO_APPLY_MAX_PER_RUN, tier_remaining))
+
     bot           = AutoApplyBot(headless=AUTO_APPLY_HEADLESS, debug=False)
     apply_results = []
     consecutive_failures = 0
 
-    for r in passed_results[:AUTO_APPLY_MAX_PER_RUN]:
+    for r in passed_results[:max_this_run]:
         if r.score < threshold:
             logger.info(
                 "Skipping — below threshold",

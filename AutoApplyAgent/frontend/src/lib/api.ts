@@ -5,6 +5,7 @@ import type {
   DashboardResponse,
   DashboardJob,
   OnboardingPayload,
+  PlatformSessionsResponse,
   ScanStartResponse,
   ScanStatusResponse,
   SettingsPayload,
@@ -162,6 +163,10 @@ export async function getApplications() {
     date: formatDate(application.applied_at),
     feedback: application.user_feedback,
   })) satisfies Application[];
+}
+
+export async function getPlatformSessions() {
+  return apiRequest<PlatformSessionsResponse>("/platform-sessions");
 }
 
 export async function updateSettings(payload: SettingsPayload) {

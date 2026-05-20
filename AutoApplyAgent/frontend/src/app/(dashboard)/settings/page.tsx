@@ -7,11 +7,13 @@ import {
   Bell,
   Shield,
   Briefcase,
-  AlertCircle
+  AlertCircle,
+  RefreshCw
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/api-client";
-import { updateSettings } from "@/lib/api";
+import { getPlatformSessions, updateSettings } from "@/lib/api";
+import type { PlatformSession } from "@/lib/api-types";
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState("agent");
@@ -24,6 +26,29 @@ export default function SettingsPage() {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null);
+  const [sessions, setSessions] = useState<PlatformSession[]>([]);
+  const [sessionLoading, setSessionLoading] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
+
+  async function loadPlatformSessions() {
+    setSessionLoading(true);
+    setSessionError(null);
+    try {
+      const response = await getPlatformSessions();
+      setSessions(response.sessions);
+    } catch (error) {
+      setSessionError(error instanceof ApiError ? error.message : "Unable to load platform sessions.");
+    } finally {
+      setSessionLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      void loadPlatformSessions();
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
 
   async function handleSaveSettings() {
     setSaving(true);
@@ -146,6 +171,44 @@ export default function SettingsPage() {
                     <button type="button" onClick={() => setRemoteFlexibility((prev) => !prev)} className={`w-12 h-6 rounded-full relative cursor-pointer border shadow-[0_0_12px_rgba(255,255,255,0.06)] ${remoteFlexibility ? "bg-white border-white/20" : "bg-white/10 border-white/20"}`}>
                       <div className={`absolute top-1 w-4 h-4 bg-black rounded-full shadow-sm transition-all ${remoteFlexibility ? "right-1" : "left-1"}`}></div>
                     </button>
+                  </div>
+                  <div className="border-t border-white/10 pt-5">
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div>
+                        <h3 className="text-sm font-semibold text-white">Platform Sessions</h3>
+                        <p className="text-xs text-white/50">Live LinkedIn auto-apply needs a valid server-side session capture.</p>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={loadPlatformSessions}
+                        disabled={sessionLoading}
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 bg-white/5 text-white/70 hover:bg-white/10 disabled:opacity-50"
+                        title="Refresh session status"
+                      >
+                        <RefreshCw className={`h-4 w-4 ${sessionLoading ? "animate-spin" : ""}`} />
+                      </button>
+                    </div>
+                    {sessionError ? <p className="mb-3 text-xs text-red-300">{sessionError}</p> : null}
+                    <div className="space-y-2">
+                      {sessions.filter((session) => session.platform === "linkedin").map((session) => (
+                        <div key={session.platform} className="rounded-lg border border-white/10 bg-white/5 px-3 py-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="text-sm font-semibold capitalize text-white">{session.platform}</span>
+                            <span className={`rounded-full px-2 py-1 text-[11px] font-semibold uppercase ${
+                              session.state === "available" ? "bg-emerald-400/15 text-emerald-200" : "bg-amber-400/15 text-amber-200"
+                            }`}>
+                              {session.state}
+                            </span>
+                          </div>
+                          <p className="mt-2 text-xs leading-relaxed text-white/50">{session.message}</p>
+                          {session.captured_at ? (
+                            <p className="mt-2 text-[11px] text-white/35">
+                              Captured {new Date(session.captured_at).toLocaleString()} with {session.cookie_count} cookies
+                            </p>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                   <div className="pt-3">
                     <button
