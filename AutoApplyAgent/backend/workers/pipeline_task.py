@@ -1,6 +1,6 @@
 import asyncio
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 
@@ -225,7 +225,7 @@ async def save_scored_results_to_db(user_id: str, scored_results: list, threshol
                     reasoning=getattr(r, "reason", getattr(r, "reasoning", "")),
                     status=status,
                     platform=auto_platform,
-                    applied_at=datetime.utcnow(),
+                    applied_at=datetime.now(timezone.utc),
                 )
                 session.add(application)
                 logger.info(

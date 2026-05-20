@@ -12,7 +12,9 @@ load_dotenv(dotenv_path=env_path)
 
 REDIS_URL = os.getenv("REDIS_URL") or os.getenv("UPSTASH_REDIS_URL")
 if not REDIS_URL:
-    raise ValueError("REDIS_URL or UPSTASH_REDIS_URL is required for Celery")
+    import logging
+    logging.warning("REDIS_URL or UPSTASH_REDIS_URL is required for Celery tasks. Using dummy URL.")
+    REDIS_URL = "redis://localhost:6379/0"
 
 # Upstash uses managed TLS — CERT_NONE avoids self-signed cert errors
 ssl_cert_reqs_env = os.getenv("REDIS_SSL_CERT_REQS", "none").lower()

@@ -64,7 +64,7 @@ export async function apiRequest<T>(
   const baseUrl = getBaseUrl();
   const headers = new Headers(init?.headers);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 8000);
+  const timeout = setTimeout(() => controller.abort(), 30000);
 
   if (!headers.has("Content-Type") && init?.body && !(init.body instanceof FormData)) {
     headers.set("Content-Type", "application/json");

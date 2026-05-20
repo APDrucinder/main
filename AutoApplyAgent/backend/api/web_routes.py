@@ -107,7 +107,6 @@ async def login(
     email = payload.email.lower()
     try:
         user = await _fetch_or_create_user(db, email)
-        await db.commit()
         await db.refresh(user)
     except (TimeoutError, SQLAlchemyError):
         if AUTH_REQUIRED or not DEV_USER_ID:
@@ -149,7 +148,7 @@ async def dashboard(
     current_user_id: UUID = Depends(get_current_user_id),
     db: AsyncSession = Depends(get_db),
 ):
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     start_of_week = start_of_today - timedelta(days=now.weekday())
 
@@ -288,8 +287,6 @@ async def update_settings(
         preference.remote_ok = payload.remote_ok
         preference.auto_apply_threshold = payload.auto_apply_threshold
         preference.is_active = True
-
-        await db.commit()
     except (TimeoutError, SQLAlchemyError):
         if AUTH_REQUIRED:
             raise
@@ -343,8 +340,6 @@ async def onboarding(
     preference.remote_ok = payload.remote_ok
     preference.auto_apply_threshold = payload.auto_apply_threshold
     preference.is_active = True
-
-    await db.commit()
 
     return data_response(
         {

@@ -69,7 +69,7 @@ async def get_application_stats(
 ):
     assert_user_scope(current_user_id, user_id)
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     start_of_week = start_of_today - timedelta(days=now.weekday())
 

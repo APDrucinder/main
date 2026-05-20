@@ -74,9 +74,9 @@ Respond ONLY in JSON. No explanation, no markdown.
                 )
 
                 if pref_remote and not getattr(job, "is_remote", False):
-                    # Respect explicit remote preference by down-scoping non-remote jobs.
-                    result.passed = False
-                    result.reason = "Candidate prefers remote roles"
+                    # Respect explicit remote preference by penalizing non-remote jobs slightly instead of force-failing
+                    result.score = max(0, result.score - 15)
+                    result.reason += " (Penalty: candidate prefers remote)"
                 return result
 
             except Exception as exc:

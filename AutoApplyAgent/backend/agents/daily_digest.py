@@ -9,7 +9,7 @@ Scheduled via Celery Beat at 7pm every day.
 import asyncio
 import os
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 from shared.base_agent import BaseAgent
 from shared.logger import logger
@@ -107,7 +107,7 @@ class DailyDigestAgent(BaseAgent):
     async def _fetch_recent_applications(self, user_id: str) -> list:
         """Get all applications from last 24 hours for a user."""
         user_uuid = uuid.UUID(str(user_id))
-        cutoff = datetime.utcnow() - timedelta(hours=24)
+        cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
 
         async with AsyncSessionLocal() as session:
             result = await session.execute(
@@ -148,7 +148,7 @@ Write a clear, friendly, human-readable summary of their activity from the last 
 
 User: {user.email}
 Total applications: {len(applications)}
-Date: {datetime.utcnow().strftime("%B %d, %Y")}
+Date: {datetime.now(timezone.utc).strftime("%B %d, %Y")}
 
 Applications:
 {apps_text}
@@ -196,7 +196,7 @@ Separate the two versions with exactly this line:
 
     def _wrap_email_html(self, content: str, email: str, count: int) -> str:
         """Wrap LLM content in a clean email template."""
-        date_str = datetime.utcnow().strftime("%B %d, %Y")
+        date_str = datetime.now(timezone.utc).strftime("%B %d, %Y")
         return f"""
 <!DOCTYPE html>
 <html>
@@ -251,7 +251,7 @@ Separate the two versions with exactly this line:
             message = Mail(
                 from_email=SENDGRID_FROM,
                 to_emails=to_email,
-                subject=f"📊 Your Daily Job Digest — {datetime.utcnow().strftime('%b %d')}",
+                subject=f"📊 Your Daily Job Digest — {datetime.now(timezone.utc).strftime('%b %d')}",
                 html_content=html_content
             )
 
@@ -274,8 +274,9 @@ Separate the two versions with exactly this line:
 
         try:
             # Ensure phone is in correct format
+            phone = phone.strip()
             if not phone.startswith("whatsapp:"):
-                to_number = f"whatsapp:+{phone.strip().lstrip('+')}"
+                to_number = f"whatsapp:+{phone.lstrip('+')}"
             else:
                 to_number = phone
 

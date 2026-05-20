@@ -57,9 +57,10 @@ async def run_scan_direct(
         "error": None,
     }
 
-    asyncio.create_task(
+    task = asyncio.create_task(
         _execute_scan(scan_id, str(current_user_id), locations, resume_path)
     )
+    _scans[scan_id]["task"] = task
 
     return {
         "scan_id": scan_id,
@@ -69,7 +70,10 @@ async def run_scan_direct(
 
 
 @router.get("/run/{scan_id}/status")
-async def get_scan_run_status(scan_id: str):
+async def get_scan_run_status(
+    scan_id: str,
+    current_user_id: uuid.UUID = Depends(get_current_user_id),
+):
     """Poll the status of a direct scan."""
     scan = _scans.get(scan_id)
     if not scan:

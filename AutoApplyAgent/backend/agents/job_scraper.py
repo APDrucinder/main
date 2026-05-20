@@ -250,7 +250,13 @@ class JobScraper(BaseAgent):
                     logger.error("JobSpy scrape failed", error=str(e), role=role, location=search_location)
 
                 # --- PHASE 2: Naukri (Cached + Selenium) ---
-                naukri_results = []
+                try:
+                    naukri_results = self._scrape_naukri(role, clean_loc)
+                    logger.info("Naukri scrape complete", new_jobs=len(naukri_results), role=role, location=clean_loc)
+                except Exception as e:
+                    logger.error("Naukri scrape failed", error=str(e), role=role, location=clean_loc)
+                    naukri_results = []
+
                 for job in naukri_results:
                     if job.apply_url not in seen_urls:
                         seen_urls.add(job.apply_url)

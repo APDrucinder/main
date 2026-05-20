@@ -149,7 +149,7 @@ RESUME TEXT:
         )
 
         clean_response = self._clean_json_response(response)
-        print("FULL OUTPUT:", repr(clean_response))
+        logger.debug("Successfully parsed resume JSON payload")
 
         try:
             data = json.loads(clean_response)
