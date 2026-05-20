@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from database.connection import AsyncSessionLocal
 from database.models import Application
 
-async def test():
+async def query_application_stats():
     now = datetime.utcnow()
     start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
     start_of_week = start_of_today - timedelta(days=now.weekday())
@@ -20,4 +20,5 @@ async def test():
         result = await db.execute(stmt)
         print(result.one())
 
-asyncio.run(test())
+if __name__ == "__main__":
+    asyncio.run(query_application_stats())

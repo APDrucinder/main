@@ -26,7 +26,7 @@ from workers.pipeline_task import (
 import os
 
 AUTO_APPLY_ENABLED: bool = os.getenv("AUTO_APPLY_ENABLED", "true").lower() == "true"
-AUTO_APPLY_DRY_RUN: bool = os.getenv("AUTO_APPLY_DRY_RUN", "false").lower() == "true"
+AUTO_APPLY_DRY_RUN: bool = os.getenv("AUTO_APPLY_DRY_RUN", "true").lower() == "true"
 
 router = APIRouter(prefix="/scan", tags=["scan-direct"])
 

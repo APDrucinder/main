@@ -19,10 +19,11 @@ DEFAULT_LOCATIONS = ["Bangalore", "Mumbai"]
 DEFAULT_NUM_JOBS  = 10
 
 # ── Feature flags ─────────────────────────────────────────────────────────────
-# Override in Railway: AUTO_APPLY_ENABLED=false, AUTO_APPLY_DRY_RUN=true
+# First deploy should smoke-test in dry-run. Set AUTO_APPLY_DRY_RUN=false only
+# after server-side platform sessions have been captured on the deployment host.
 import os
 AUTO_APPLY_ENABLED: bool = os.getenv("AUTO_APPLY_ENABLED", "true").lower() == "true"
-AUTO_APPLY_DRY_RUN: bool = os.getenv("AUTO_APPLY_DRY_RUN", "false").lower() == "true"
+AUTO_APPLY_DRY_RUN: bool = os.getenv("AUTO_APPLY_DRY_RUN", "true").lower() == "true"
 AUTO_APPLY_HEADLESS: bool = os.getenv("AUTO_APPLY_HEADLESS", "true").lower() == "true"
 AUTO_APPLY_MAX_PER_RUN: int = int(os.getenv("AUTO_APPLY_MAX_PER_RUN", "3"))
 AUTO_APPLY_MAX_CONSECUTIVE_FAILURES: int = int(os.getenv("AUTO_APPLY_MAX_CONSECUTIVE_FAILURES", "2"))

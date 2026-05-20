@@ -29,6 +29,28 @@ SESSION_SECURE = os.getenv("SESSION_COOKIE_SECURE", "false").lower() == "true"
 SESSION_SECRET = os.getenv("SESSION_SECRET", "dev-session-secret")
 SESSION_SALT = os.getenv("SESSION_SALT", "apd-session")
 CLERK_ISSUER = os.getenv("CLERK_ISSUER", "").rstrip("/")
+ENVIRONMENT = os.getenv("ENVIRONMENT", "development").lower()
+
+
+def _validate_production_auth_config() -> None:
+    if ENVIRONMENT not in {"production", "prod"}:
+        return
+
+    errors: list[str] = []
+    if not AUTH_REQUIRED:
+        errors.append("AUTH_REQUIRED must be true in production")
+    if not SESSION_SECURE:
+        errors.append("SESSION_COOKIE_SECURE must be true in production")
+    if SESSION_SECRET == "dev-session-secret":
+        errors.append("SESSION_SECRET must be set to a strong production secret")
+    if SESSION_SALT == "apd-session":
+        errors.append("SESSION_SALT must be set to a production-specific value")
+
+    if errors:
+        raise RuntimeError("Unsafe production auth configuration: " + "; ".join(errors))
+
+
+_validate_production_auth_config()
 
 _jwks_clients: dict[str, PyJWKClient] = {}
 

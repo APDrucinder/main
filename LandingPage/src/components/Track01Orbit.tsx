@@ -13,7 +13,8 @@ const orbitLabels = [
 ] as const;
 
 const agentOneHref =
-  process.env.NEXT_PUBLIC_AGENT_ONE_URL ?? "http://localhost:3001/dashboard";
+  process.env.NEXT_PUBLIC_AGENT_ONE_URL ??
+  (process.env.NODE_ENV === "development" ? "http://localhost:3001/dashboard" : "/dashboard");
 
 const agentVisuals = [
   {

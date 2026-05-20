@@ -21,11 +21,14 @@ const navItems = [
 
 export function TopNav() {
   const pathname = usePathname();
+  const landingHref =
+    process.env.NEXT_PUBLIC_LANDING_URL ??
+    (process.env.NODE_ENV === "development" ? "http://localhost:3000/" : "/");
 
   if (pathname.startsWith("/login")) {
     return (
       <header className="absolute top-0 left-0 w-full h-24 flex items-center z-40 bg-transparent px-8 py-4">
-        <Link href="http://localhost:3000/" className="flex items-center gap-2 text-foreground hover:opacity-80 transition-opacity">
+        <Link href={landingHref} className="flex items-center gap-2 text-foreground hover:opacity-80 transition-opacity">
           <img src="/celerix-hex-mark.png" alt="Celerix Logo" className="w-6 h-6 object-contain invert" />
           <span className="font-bold text-xl tracking-wide uppercase text-white">CelerixAi</span>
         </Link>
