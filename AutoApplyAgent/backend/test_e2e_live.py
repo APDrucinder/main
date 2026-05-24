@@ -45,6 +45,7 @@ DEFAULT_LOCATIONS = ["Bangalore", "Mumbai"]
 
 DEFAULT_THRESHOLD = 75
 DEFAULT_MAX_APPS = 3
+E2E_USER_ID = "858011cd-5a44-4e86-9bc7-0088c22b8efe"
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -78,14 +79,14 @@ async def run_e2e_test(
 
     # ── Check cookie status ────────────────────────────────────
     print("  📂 Cookie Status:")
-    saved = list_saved_cookies()
+    saved = list_saved_cookies(user_id=E2E_USER_ID)
     if saved:
         for plat, info in saved.items():
             status = "⚠ expired" if info["all_expired"] else "✅ valid"
             print(f"      {plat:<15}  {info['cookie_count']:>3} cookies  {status}")
     else:
-        print("      ⚠  No cookies saved! Run: python cookie_manager.py linkedin naukri")
-    print("      LinkedIn live auto-apply requires cookies captured on this deployment machine.")
+        print(f"      ⚠  No cookies saved! Run: python cookie_manager.py --user-id {E2E_USER_ID} linkedin naukri")
+    print("      LinkedIn live auto-apply requires user-specific cookies captured on this deployment machine.")
     print()
 
     # ── Check resume ───────────────────────────────────────────
@@ -113,7 +114,7 @@ async def run_e2e_test(
     pipeline = JobApplicationPipeline(
         apply_threshold=threshold,
         max_applications=max_apps,
-        user_id="e2e-test",
+        user_id=E2E_USER_ID,
         dry_run=dry_run,
     )
 

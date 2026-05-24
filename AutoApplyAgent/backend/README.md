@@ -46,7 +46,8 @@ pytest -q
 - Set `DATABASE_URL` and Redis (`REDIS_URL` or `UPSTASH_REDIS_URL`) before deployment.
 - Keep `DB_SSL_VERIFY=true` and `REDIS_SSL_CERT_REQS=required` in production.
 - Use `AUTO_APPLY_DRY_RUN=true` for safe smoke runs before enabling live submission.
-- Live LinkedIn auto-apply requires a valid LinkedIn session captured on the deployment machine. If cookies are missing, expired, or open LinkedIn signed out, the worker stops auto-apply and marks the result as needing credentials.
+- Live LinkedIn auto-apply requires a valid user-specific LinkedIn session captured on the deployment machine. Capture with `python cookie_manager.py --user-id <user_uuid> linkedin`. If cookies are missing, expired, or open LinkedIn signed out, the worker stops auto-apply and marks the result as needing credentials.
+- Platform cookies are isolated per user under `cookies/users/<user_uuid>/`. The backend refuses to load legacy global cookies unless `ALLOW_GLOBAL_PLATFORM_COOKIES=true` is explicitly set for a local-only legacy run.
 - Do not claim automation can never be flagged by a platform. Production auto-apply uses conservative defaults: `AUTO_APPLY_MIN_THRESHOLD=75`, `AUTO_APPLY_MAX_PER_RUN=3`, and `AUTO_APPLY_MAX_CONSECUTIVE_FAILURES=2`.
 - Session auth endpoints are available at `/auth/login`, `/auth/logout`, and `/auth/me`.
 - Browser clients should call APIs with credentials enabled to include the HttpOnly session cookie.

@@ -288,7 +288,8 @@ class JobApplicationPipeline:
         try:
             applier = AutoApplyBot(
                 headless=True,
-                dry_run=self.dry_run
+                dry_run=self.dry_run,
+                user_id=self.user_id,
             )
 
             for job, score in auto_apply_jobs:

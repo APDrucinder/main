@@ -312,7 +312,7 @@ async def run_auto_apply(
     tier_remaining = AUTO_APPLY_MAX_PER_RUN if remaining == "unlimited" else int(remaining)
     max_this_run = max(0, min(AUTO_APPLY_MAX_PER_RUN, tier_remaining))
 
-    bot           = AutoApplyBot(headless=AUTO_APPLY_HEADLESS, debug=False)
+    bot           = AutoApplyBot(headless=AUTO_APPLY_HEADLESS, debug=False, user_id=user_id)
     apply_results = []
     consecutive_failures = 0
 

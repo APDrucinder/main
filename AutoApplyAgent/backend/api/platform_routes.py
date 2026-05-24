@@ -18,19 +18,19 @@ def _status_for(platform: str, saved: dict[str, dict]) -> dict[str, object]:
     if not info:
         state = "missing"
         message = (
-            f"No server-side {platform} session is saved. Recapture it on the deployment "
-            f"machine with: python cookie_manager.py {platform}"
+            f"No user-specific {platform} session is saved. Capture it on the deployment "
+            f"machine with: python cookie_manager.py --user-id <this-user-uuid> {platform}"
         )
     elif info.get("all_expired"):
         state = "expired"
         message = (
-            f"The saved {platform} session cookies are expired. Recapture on the deployment "
-            f"machine before live auto-apply."
+            f"This user's saved {platform} session cookies are expired. Recapture on the "
+            f"deployment machine before live auto-apply."
         )
     else:
         state = "available"
         message = (
-            f"A server-side {platform} session capture exists. Live runs will still stop "
+            f"A user-specific {platform} session capture exists. Live runs will still stop "
             f"if the platform opens signed out."
         )
 
@@ -40,16 +40,18 @@ def _status_for(platform: str, saved: dict[str, dict]) -> dict[str, object]:
         "required_for_live": platform in LIVE_REQUIRED_PLATFORMS,
         "cookie_count": info.get("cookie_count", 0) if info else 0,
         "captured_at": info.get("captured_at") if info else None,
+        "user_scoped": bool(info and info.get("user_id")),
         "message": message,
     }
 
 
 @router.get("")
-async def platform_sessions(_: UUID = Depends(get_current_user_id)):
-    saved = list_saved_cookies()
+async def platform_sessions(current_user_id: UUID = Depends(get_current_user_id)):
+    saved = list_saved_cookies(user_id=str(current_user_id))
     platforms = sorted(set(PLATFORM_LOGIN_URLS) | LIVE_REQUIRED_PLATFORMS)
 
     return {
         "checked_at": datetime.now(timezone.utc).isoformat(),
+        "user_id": str(current_user_id),
         "sessions": [_status_for(platform, saved) for platform in platforms],
     }

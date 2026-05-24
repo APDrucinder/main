@@ -4,10 +4,12 @@ from pathlib import Path
 from datetime import datetime, timezone
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-COOKIES_DIR = BASE_DIR / "cookies"
-COOKIES_DIR.mkdir(exist_ok=True)
+sys.path.insert(0, str(BASE_DIR))
 
-def import_cookies(platform: str, filepath: str):
+from cookie_manager import _cookie_path, _safe_user_id
+
+
+def import_cookies(user_id: str, platform: str, filepath: str):
     try:
         with open(filepath, "r") as f:
             cookies = json.load(f)
@@ -25,23 +27,24 @@ def import_cookies(platform: str, filepath: str):
     
     payload = {
         "platform": platform,
+        "user_id": _safe_user_id(user_id),
         "captured_at": datetime.now(timezone.utc).isoformat(),
         "cookie_count": len(cookies),
         "user_agent": user_agent_str,
         "cookies": cookies,
     }
     
-    out_file = COOKIES_DIR / f"{platform}_cookies.json"
+    out_file = _cookie_path(platform, user_id=user_id, create_parent=True)
     out_file.write_text(json.dumps(payload, indent=2))
-    print(f"✅ Imported {len(cookies)} cookies for {platform} -> {out_file}")
+    print(f"✅ Imported {len(cookies)} cookies for user {user_id} on {platform} -> {out_file}")
 
 if __name__ == "__main__":
     print("╔══════════════════════════════════════════════════════════╗")
     print("║          🍪  CelerixAi Cookie Import Tool                ║")
     print("║  Import EditThisCookie JSON for deployment environments  ║")
     print("╚══════════════════════════════════════════════════════════╝\n")
-    if len(sys.argv) < 3:
-        print("Usage: python import_cookies_json.py <platform> <path_to_exported_json>")
-        print("Example: python import_cookies_json.py linkedin /tmp/linkedin_cookies.json")
+    if len(sys.argv) < 4:
+        print("Usage: python import_cookies_json.py <user_uuid> <platform> <path_to_exported_json>")
+        print("Example: python import_cookies_json.py 858011cd-5a44-4e86-9bc7-0088c22b8efe linkedin /tmp/linkedin_cookies.json")
         sys.exit(1)
-    import_cookies(sys.argv[1], sys.argv[2])
+    import_cookies(sys.argv[1], sys.argv[2], sys.argv[3])
