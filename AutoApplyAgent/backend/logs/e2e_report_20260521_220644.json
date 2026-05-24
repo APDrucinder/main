@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-05-21T22:06:44.681448",
+  "mode": "live",
+  "threshold": 60,
+  "duration_seconds": 94.7,
+  "resume_parsed": true,
+  "jobs_scraped": 70,
+  "jobs_after_filter": 17,
+  "jobs_scored": 5,
+  "auto_apply_count": 0,
+  "applied_count": 0,
+  "failed_count": 0,
+  "errors": [],
+  "apply_results": []
+}

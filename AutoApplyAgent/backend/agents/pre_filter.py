@@ -80,8 +80,8 @@ Respond ONLY in JSON. No explanation, no markdown.
                 return result
 
             except Exception as exc:
-                logger.warning("LLM pre-filter failed for job", title=job.title, error=str(exc))
-                return PreFilterResult(job=job, passed=False, reason="Evaluation failed", score=0)
+                logger.warning("LLM pre-filter failed for job — passing with low score to avoid silent drops", title=job.title, error=str(exc))
+                return PreFilterResult(job=job, passed=True, reason="Evaluation failed — passed by default", score=30)
 
     async def filter_all(
         self,

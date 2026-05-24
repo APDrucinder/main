@@ -341,7 +341,8 @@ class AutoApplyBot:
 
 async def auto_apply(job, resume_path: str) -> dict[str, Any]:
     """Backward-compatible helper used by older retry wrappers."""
-    bot = AutoApplyBot(headless=True, debug=False, dry_run=False)
+    dry_run = os.getenv("AUTO_APPLY_DRY_RUN", "true").lower() == "true"
+    bot = AutoApplyBot(headless=True, debug=False, dry_run=dry_run)
     result = await bot.apply(
         job_url=job.apply_url,
         user_data={},

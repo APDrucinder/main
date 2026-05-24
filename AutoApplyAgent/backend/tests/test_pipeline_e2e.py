@@ -27,7 +27,7 @@ TEST_PREFERENCES = UserPreferences(
     auto_apply_threshold=75
 )
 
-TEST_USER_ID = "test-user-123"
+TEST_USER_ID = "858011cd-5a44-4e86-9bc7-0088c22b8efe"
 # ============================================
 
 @pytest.mark.asyncio
@@ -96,10 +96,16 @@ async def test_full_pipeline():
         print("TEST 3: Pre Filter")
         print("-" * 40)
         
-        from agents.pre_filter import keyword_prefilter
+        from agents.pre_filter import PreFilter
+        pre_filter = PreFilter()
+        pre_filter_results = await pre_filter.filter_all(
+            jobs=jobs,
+            candidate_skills=resume.skills,
+            pref_remote=TEST_PREFERENCES.remote_ok
+        )
         filtered = [
-            j for j in jobs
-            if keyword_prefilter(j, resume, TEST_PREFERENCES)
+            r.job for r in pre_filter_results
+            if r.passed
         ]
         
         results["jobs_after_filter"] = len(filtered)

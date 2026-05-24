@@ -1,0 +1,38 @@
+{
+  "timestamp": "2026-05-21T22:30:56.930315",
+  "mode": "live",
+  "threshold": 60,
+  "duration_seconds": 146.9,
+  "resume_parsed": true,
+  "jobs_scraped": 70,
+  "jobs_after_filter": 17,
+  "jobs_scored": 5,
+  "auto_apply_count": 4,
+  "applied_count": 0,
+  "failed_count": 2,
+  "errors": [
+    "DB persistence failed: "
+  ],
+  "apply_results": [
+    {
+      "job_title": "Custom Software Engineer",
+      "company": "Accenture",
+      "score": 75,
+      "apply_url": "https://www.naukri.com/job-listings-custom-software-engineer-accenture-solutions-pvt-ltd-bengaluru-5-to-10-years-180526922030",
+      "applied": false,
+      "source": "naukri",
+      "status": "failed",
+      "reason": "Handler reported unsuccessful apply flow"
+    },
+    {
+      "job_title": "Software Engineer III, General Software Development, High Tide",
+      "company": "Google",
+      "score": 65,
+      "apply_url": "https://www.linkedin.com/jobs/view/4406995295",
+      "applied": false,
+      "source": "linkedin",
+      "status": "login_failed",
+      "reason": "linkedin opened a sign-in page. Reconnect this platform on the deployment machine before live auto-apply."
+    }
+  ]
+}

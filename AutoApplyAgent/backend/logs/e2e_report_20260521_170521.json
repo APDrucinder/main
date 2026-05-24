@@ -1,0 +1,28 @@
+{
+  "timestamp": "2026-05-21T17:05:21.596039",
+  "mode": "live",
+  "threshold": 70,
+  "duration_seconds": 322.9,
+  "resume_parsed": true,
+  "jobs_scraped": 209,
+  "jobs_after_filter": 91,
+  "jobs_scored": 15,
+  "auto_apply_count": 1,
+  "applied_count": 0,
+  "failed_count": 1,
+  "errors": [
+    "DB persistence failed: (raised as a result of Query-invoked autoflush; consider using a session.no_autoflush block if this flush is occurring prematurely)\n(sqlalchemy.dialects.postgresql.asyncpg.IntegrityError) <class 'asyncpg.exceptions.ForeignKeyViolationError'>: insert or update on table \"applications\" violates foreign key constraint \"applications_user_id_fkey\"\nDETAIL:  Key (user_id)=(7976f5ef-34f6-4e57-bbbf-936f0293575c) is not present in table \"users\".\n[SQL: INSERT INTO applications (id, user_id, job_id, match_score, matched_skills, missing_skills, reasoning, status, platform, manual_apply_url, user_feedback) VALUES ($1::UUID, $2::UUID, $3::UUID, $4::INTEGER, $5::VARCHAR[], $6::VARCHAR[], $7::VARCHAR, $8::VARCHAR, $9::VARCHAR, $10::VARCHAR, $11::VARCHAR) RETURNING applications.applied_at]\n[parameters: (UUID('d18626ba-1bbc-4fbe-8b02-173cb20c6620'), UUID('7976f5ef-34f6-4e57-bbbf-936f0293575c'), UUID('ba1d69a6-d873-4020-95e2-f549f9edd87b'), 75, ['Python', 'CSS', 'React'], ['Scala', 'RESTful'], 'The candidate demonstrates strong foundational skills in Python and React, which are key technologies for this role. Their project work, particularly ... (430 characters truncated) ... r role at Accenture. However, their existing skillset and project experience suggest they have the potential to quickly acquire these missing skills.', 'auto_apply_pending', 'naukri', 'https://www.naukri.com/job-listings-custom-software-engineer-accenture-solutions-pvt-ltd-bengaluru-5-to-10-years-200526940230', None)]\n(Background on this error at: https://sqlalche.me/e/20/gkpj)"
+  ],
+  "apply_results": [
+    {
+      "job_title": "Custom Software Engineer",
+      "company": "Accenture",
+      "score": 75,
+      "apply_url": "https://www.naukri.com/job-listings-custom-software-engineer-accenture-solutions-pvt-ltd-bengaluru-5-to-10-years-200526940230",
+      "applied": false,
+      "source": "naukri",
+      "status": "failed",
+      "reason": "Handler reported unsuccessful apply flow"
+    }
+  ]
+}

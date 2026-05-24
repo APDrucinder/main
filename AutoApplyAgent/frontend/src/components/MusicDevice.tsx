@@ -1,7 +1,6 @@
 "use client";
 
-import { AnimatePresence, motion } from "framer-motion";
-import { IconNext, IconPause, IconPrev } from "./icons";
+import { motion } from "framer-motion";
 import { CharcoalOrb } from "./Background";
 
 const agents = [
@@ -35,14 +34,6 @@ interface MusicDeviceProps {
 }
 
 export function MusicDevice({ className, activeIndex, onChange }: MusicDeviceProps) {
-  const handlePrev = () => {
-    onChange((activeIndex - 1 + agents.length) % agents.length);
-  };
-
-  const handleNext = () => {
-    onChange((activeIndex + 1) % agents.length);
-  };
-
   const currentAgent = agents[activeIndex];
 
   return (

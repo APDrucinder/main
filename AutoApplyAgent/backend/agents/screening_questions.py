@@ -34,6 +34,9 @@ STANDARD_FIELD_KEYWORDS = [
 
 # ─── Common screening questions and their field keywords ───────
 COMMON_QUESTIONS = {
+    "name": ["full name", "first name", "last name", "name", "candidate name"],
+    "phone": ["phone", "mobile", "whatsapp", "contact", "telephone", "phone number", "mobile number"],
+    "email": ["email", "email address"],
     "notice_period": ["notice period", "joining", "available from", "start date"],
     "current_salary": ["current salary", "current ctc", "current compensation"],
     "expected_salary": ["expected salary", "expected ctc", "salary expectation", "desired salary"],
@@ -315,5 +318,9 @@ Answer:"""
         label_lower = label.lower()
         for q_type, keywords in COMMON_QUESTIONS.items():
             if any(kw in label_lower for kw in keywords):
-                return str(resume_data.get(q_type, "Yes"))
+                val = resume_data.get(q_type)
+                if val is not None:
+                    return str(val)
+                if q_type not in {"name", "phone", "email"}:
+                    return str(resume_data.get(q_type, "Yes"))
         return None

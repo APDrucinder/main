@@ -9,6 +9,7 @@ import {
   Settings
 } from "lucide-react";
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 
@@ -29,7 +30,7 @@ export function TopNav() {
     return (
       <header className="absolute top-0 left-0 w-full h-24 flex items-center z-40 bg-transparent px-8 py-4">
         <Link href={landingHref} className="flex items-center gap-2 text-foreground hover:opacity-80 transition-opacity">
-          <img src="/celerix-hex-mark.png" alt="Celerix Logo" className="w-6 h-6 object-contain invert" />
+          <Image src="/celerix-hex-mark.png" alt="Celerix Logo" width={24} height={24} className="object-contain invert" />
           <span className="font-bold text-xl tracking-wide uppercase text-white">CelerixAi</span>
         </Link>
       </header>
@@ -42,7 +43,7 @@ export function TopNav() {
       {/* Left: Logo */}
       <div className="flex items-center gap-8">
         <Link href="/" className="flex items-center gap-2 text-foreground hover:opacity-80 transition-opacity">
-          <img src="/celerix-hex-mark.png" alt="Celerix Logo" className="w-6 h-6 object-contain invert" />
+          <Image src="/celerix-hex-mark.png" alt="Celerix Logo" width={24} height={24} className="object-contain invert" />
           <span className="font-bold text-xl tracking-wide uppercase text-white">CelerixAi</span>
         </Link>
       </div>

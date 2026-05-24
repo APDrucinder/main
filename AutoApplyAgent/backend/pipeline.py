@@ -1,24 +1,26 @@
 from __future__ import annotations
 
 import asyncio
+import uuid
 from typing import List, Optional
 
 from pydantic import BaseModel
 from playwright.async_api import async_playwright
 
-from agents.job_scraper import JobScraper
+from agents.job_scraper import JobScraper, JobPosting
 from agents.job_scorer import JobScorer
 from agents.pre_filter import PreFilter
 from agents.resume_parser import ResumeParser
 from agents.auto_apply import AutoApplyBot
 from agents.tier_limits import check_tier_limit
 from database.connection import AsyncSessionLocal
+from database.models import Application, Job, User
 from shared.logger import logger
 
 ROLES = ["software engineer", "python developer", "backend developer"]
 NUM_JOBS = 10
 RESUME_PATH = "Dhruv_Resume.pdf"
-AUTO_APPLY_MIN_THRESHOLD = 75
+AUTO_APPLY_MIN_THRESHOLD = 60
 AUTO_APPLY_MAX_CONSECUTIVE_FAILURES = 2
 
 
@@ -151,7 +153,35 @@ class JobApplicationPipeline:
 
         # Sort by pre-filter score before LLM scoring
         passed.sort(key=lambda r: r.score, reverse=True)
-        apply_candidates = passed[:self.max_applications]
+
+        # Deduplicate by apply_url and normalized title + company (same job listed on different URLs)
+        import re
+        seen_urls: set[str] = set()
+        seen_jobs: set[tuple[str, str]] = set()
+        unique_passed = []
+        for r in passed:
+            url_key = r.job.apply_url.rstrip("/").split("?")[0].lower()
+            norm_title = re.sub(r'[^a-z0-9]', '', r.job.title.lower())
+            norm_company = re.sub(r'[^a-z0-9]', '', r.job.company.lower())
+            job_key = (norm_title, norm_company)
+
+            is_duplicate = False
+            if url_key in seen_urls:
+                is_duplicate = True
+            elif norm_title and norm_company and job_key in seen_jobs:
+                is_duplicate = True
+
+            if not is_duplicate:
+                seen_urls.add(url_key)
+                if norm_title and norm_company:
+                    seen_jobs.add(job_key)
+                unique_passed.append(r)
+            else:
+                logger.debug("Duplicate job removed before scoring", title=r.job.title, company=r.job.company, url=r.job.apply_url)
+
+        # Score a larger pool so we're likely to find enough jobs above threshold
+        scoring_pool_size = min(len(unique_passed), self.max_applications * 5, 15)
+        apply_candidates = unique_passed[:scoring_pool_size]
 
         # ─── STEP 3: LLM Scoring ─────────────────────────────────
         logger.info(
@@ -229,6 +259,8 @@ class JobApplicationPipeline:
             "phone": resume.phone,
             "resume_path": resume_path,
             "skills": resume.skills,
+            "total_experience_years": resume.total_experience_years,
+            "experience_years": resume.total_experience_years,
             "experience": [
                 {
                     "company": exp.company,
@@ -267,10 +299,20 @@ class JobApplicationPipeline:
                     score=score.score
                 )
 
+                # Enrich with nested job and resume contexts for screening questions agent and form filling compatibility
+                job_user_data = dict(user_data)
+                job_user_data["job_data"] = {
+                    "title": job.title,
+                    "company": job.company,
+                    "location": job.location,
+                    "description": job.description,
+                }
+                job_user_data["parsed_resume"] = user_data
+
                 try:
                     result = await applier.apply(
                         job_url=job.apply_url,
-                        user_data=user_data,
+                        user_data=job_user_data,
                         resume_url=resume_path,
                         credentials=None
                     )
@@ -325,7 +367,15 @@ class JobApplicationPipeline:
         results["failed_count"] = sum(
             1 for r in apply_results if not r["applied"]
         )
-       
+
+        # ─── STEP 5: Persist to Database ─────────────────────────
+        logger.info("STEP 5: Persisting results to database")
+        try:
+            await self._persist_results(resume_path, resume, scored_results, apply_results)
+            logger.info("Database persistence complete")
+        except Exception as exc:
+            logger.error("Database persistence failed", error=str(exc))
+            results["errors"].append(f"DB persistence failed: {str(exc)}")
 
         # ─── FINAL SUMMARY ───────────────────────────────────────
         logger.info("=" * 60)
@@ -343,6 +393,132 @@ class JobApplicationPipeline:
         logger.info("=" * 60)
 
         return results
+
+    async def _persist_results(
+        self,
+        resume_path: str,
+        resume,
+        scored_results,
+        apply_results: list[dict],
+    ) -> None:
+        """Save scored jobs and application results to the database."""
+        apply_lookup = {
+            (r["job_title"], r["company"]): r
+            for r in apply_results
+        }
+
+        # Resolve user_id to a valid UUID
+        import os
+        resolved_user_id = None
+
+        # 1. Check DEV_USER_ID env variable
+        dev_user_str = os.getenv("DEV_USER_ID")
+        if dev_user_str:
+            try:
+                resolved_user_id = uuid.UUID(dev_user_str)
+            except ValueError:
+                pass
+
+        # 2. Check if self.user_id is a valid UUID
+        if not resolved_user_id and self.user_id:
+            try:
+                resolved_user_id = uuid.UUID(self.user_id)
+            except ValueError:
+                pass
+
+        # 3. Fallback to a valid stable UUID for test purposes
+        if not resolved_user_id:
+            resolved_user_id = uuid.UUID("858011cd-5a44-4e86-9bc7-0088c22b8efe")
+
+        async with AsyncSessionLocal() as db:
+            from sqlalchemy import select
+
+            # Ensure that the user exists in the users table to satisfy foreign key constraints
+            user_exists = await db.execute(
+                select(User).where(User.id == resolved_user_id)
+            )
+            user_row = user_exists.scalar_one_or_none()
+            if not user_row:
+                user_row = User(
+                    id=resolved_user_id,
+                    clerk_id=f"clerk_e2e_{resolved_user_id.hex[:12]}",
+                    email=resume.email or "e2e-test@example.com",
+                    phone=resume.phone,
+                    subscription_tier="free",
+                )
+                db.add(user_row)
+                await db.flush()
+                logger.info("Created e2e test user in database", user_id=str(resolved_user_id))
+
+            for job_posting, score in scored_results:
+                # Upsert Job row
+                existing_job = await db.execute(
+                    select(Job).where(Job.apply_url == job_posting.apply_url)
+                )
+                job_row = existing_job.scalar_one_or_none()
+                if not job_row:
+                    job_row = Job(
+                        id=uuid.uuid4(),
+                        title=job_posting.title,
+                        company=job_posting.company,
+                        location=job_posting.location,
+                        description=job_posting.description[:5000] if job_posting.description else None,
+                        salary_range=job_posting.salary_range,
+                        apply_url=job_posting.apply_url,
+                        source=job_posting.source,
+                        posted_date=job_posting.posted_date,
+                    )
+                    db.add(job_row)
+                    await db.flush()
+
+                # Determine application status
+                apply_info = apply_lookup.get((job_posting.title, job_posting.company))
+                if apply_info and apply_info.get("applied"):
+                    status = "applied"
+                elif score.should_apply:
+                    status = "auto_apply_pending"
+                else:
+                    status = "matched"
+
+                platform = apply_info.get("source") if apply_info else job_posting.source
+
+                # Upsert Application row to avoid unique constraint violations on (user_id, job_id)
+                existing_app = await db.execute(
+                    select(Application).where(
+                        Application.user_id == resolved_user_id,
+                        Application.job_id == job_row.id
+                    )
+                )
+                app_row = existing_app.scalar_one_or_none()
+                if not app_row:
+                    app_row = Application(
+                        id=uuid.uuid4(),
+                        user_id=resolved_user_id,
+                        job_id=job_row.id,
+                        match_score=score.score,
+                        matched_skills=score.matched_skills,
+                        missing_skills=score.missing_skills,
+                        reasoning=score.reasoning,
+                        status=status,
+                        platform=platform,
+                        manual_apply_url=job_posting.apply_url,
+                    )
+                    db.add(app_row)
+                else:
+                    app_row.match_score = score.score
+                    app_row.matched_skills = score.matched_skills
+                    app_row.missing_skills = score.missing_skills
+                    app_row.reasoning = score.reasoning
+                    app_row.status = status
+                    app_row.platform = platform
+                    app_row.manual_apply_url = job_posting.apply_url
+
+            await db.commit()
+            logger.info(
+                "Persisted to database",
+                jobs=len(scored_results),
+                applications=len(scored_results),
+            )
 
 
 async def run_with_limits(
